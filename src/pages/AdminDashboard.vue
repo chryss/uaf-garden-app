@@ -3,8 +3,12 @@ import { ref } from 'vue';
 import { auth } from '@/services/firebaseConfig';
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'vue-router';
+import PlotManagement from '@/pages/PlotManagement.vue';
+import GardenerManagement from '@/pages/GardenerManagement.vue';
+import CMSEditor from '@/pages/CMSEditor.vue';
 
 const router = useRouter();
+const activeTab = ref('plots');
 
 const logout = async () => {
   try {
@@ -27,45 +31,31 @@ const logout = async () => {
     </v-app-bar>
 
     <v-main>
-      <v-container>
-        <v-row class="mt-8">
-          <v-col cols="12">
-            <h1 class="text-h3 mb-8">Admin Dashboard</h1>
-          </v-col>
-        </v-row>
+      <v-container class="mt-8">
+        <v-card class="pa-6">
+          <v-card-title class="text-h4 px-0 mb-4">Admin Dashboard</v-card-title>
 
-        <v-row>
-          <v-col cols="12" md="4">
-            <v-card class="text-center pa-6 cursor-pointer" @click="$router.push('/admin/plots')">
-              <v-card-title>Plot Management</v-card-title>
-              <v-card-text>Manage plots and verify payments</v-card-text>
-            </v-card>
-          </v-col>
+          <v-tabs v-model="activeTab" color="primary">
+            <v-tab value="plots">Plot reservation management</v-tab>
+            <v-tab value="gardeners">Returning gardener management</v-tab>
+            <v-tab value="config">Global configuration</v-tab>
+          </v-tabs>
 
-          <v-col cols="12" md="4">
-            <v-card class="text-center pa-6 cursor-pointer" @click="$router.push('/admin/gardeners')">
-              <v-card-title>Gardener Management</v-card-title>
-              <v-card-text>View and edit gardener registrations</v-card-text>
-            </v-card>
-          </v-col>
+          <v-window v-model="activeTab" class="mt-6">
+            <v-window-item value="plots">
+              <PlotManagement />
+            </v-window-item>
 
-          <v-col cols="12" md="4">
-            <v-card class="text-center pa-6 cursor-pointer" @click="$router.push('/admin/cms')">
-              <v-card-title>CMS Editor</v-card-title>
-              <v-card-text>Edit website content</v-card-text>
-            </v-card>
-          </v-col>
-        </v-row>
+            <v-window-item value="gardeners">
+              <GardenerManagement />
+            </v-window-item>
+
+            <v-window-item value="config">
+              <CMSEditor />
+            </v-window-item>
+          </v-window>
+        </v-card>
       </v-container>
     </v-main>
   </v-app>
 </template>
-
-<style scoped>
-.cursor-pointer {
-  cursor: pointer;
-}
-.cursor-pointer:hover {
-  background-color: #f5f5f5;
-}
-</style>

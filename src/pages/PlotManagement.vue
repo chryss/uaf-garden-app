@@ -1,13 +1,12 @@
 <script setup>
 import { ref, onMounted } from 'vue';
-import { database, auth } from '@/services/firebaseConfig';
+import { database } from '@/services/firebaseConfig';
 import { ref as dbRef, get, update } from 'firebase/database';
-import { signOut } from 'firebase/auth';
-import { useRouter } from 'vue-router';
 
-const router = useRouter();
 const plots = ref([]);
 const loading = ref(true);
+const plotTypes = ['regular', 'needs work', 'special project'];
+const plotStatuses = ['available', 'reserved', 'verified', 'unavailable'];
 
 const loadPlots = async () => {
   try {
@@ -17,7 +16,7 @@ const loadPlots = async () => {
       plots.value = Object.entries(snapshot.val()).map(([id, data]) => ({
         id,
         ...data
-      }));
+      })).sort((a, b) => Number(a.id.split('-')[1]) - Number(b.id.split('-')[1]));
     }
   } catch (error) {
     console.error('Error loading plots:', error);
@@ -29,19 +28,24 @@ const loadPlots = async () => {
 const markAsPaid = async (plotId) => {
   try {
     const plotRef = dbRef(database, `plots/${plotId}`);
-    await update(plotRef, { paymentVerified: true });
+    await update(plotRef, { paymentVerified: true, status: 'verified' });
     await loadPlots();
   } catch (error) {
     console.error('Error updating plot:', error);
   }
 };
 
-const logout = async () => {
+const savePlot = async (plot) => {
   try {
-    await signOut(auth);
-    router.push('/admin/login');
+    const plotRef = dbRef(database, `plots/${plot.id}`);
+    await update(plotRef, {
+      type: plot.type || 'regular',
+      status: plot.status || 'available',
+      paymentVerified: plot.status === 'verified'
+    });
+    await loadPlots();
   } catch (error) {
-    console.error('Logout error:', error);
+    console.error('Error saving plot:', error);
   }
 };
 
@@ -49,42 +53,64 @@ onMounted(loadPlots);
 </script>
 
 <template>
-  <v-app>
-    <v-app-bar color="primary">
-      <v-app-bar-title>Plot Management</v-app-bar-title>
-      <v-spacer></v-spacer>
-      <v-btn icon @click="logout">
-        <v-icon>mdi-logout</v-icon>
-      </v-btn>
-    </v-app-bar>
+  <v-card class="pa-6">
+    <v-card-title class="text-h5 px-0">Plot reservation management</v-card-title>
+    <v-data-table
+      :headers="[
+        { title: 'Plot ID', key: 'id' },
+        { title: 'Name', key: 'name' },
+        { title: 'Type', key: 'type' },
+        { title: 'Status', key: 'status' },
+        { title: 'Registered Gardener', key: 'registeredGardenerId' },
+        { title: 'Payment Verified', key: 'paymentVerified' },
+        { title: 'Actions', key: 'actions' }
+      ]"
+      :items="plots"
+      :loading="loading"
+      class="elevation-1"
+    >
+      <template v-slot:item.type="{ item }">
+        <v-select
+          v-model="item.raw.type"
+          :items="plotTypes"
+          density="compact"
+          hide-details
+          variant="outlined"
+          style="min-width: 160px;"
+        />
+      </template>
 
-    <v-main>
-      <v-container class="mt-8">
-        <v-data-table
-          :headers="[
-            { title: 'Plot ID', key: 'id' },
-            { title: 'Name', key: 'name' },
-            { title: 'Status', key: 'status' },
-            { title: 'Registered Gardener', key: 'registeredGardenerId' },
-            { title: 'Payment Verified', key: 'paymentVerified' },
-            { title: 'Actions', key: 'actions' }
-          ]"
-          :items="plots"
-          :loading="loading"
-          class="elevation-1"
-        >
-          <template v-slot:item.actions="{ item }">
-            <v-btn
-              v-if="!item.paymentVerified"
-              size="small"
-              color="success"
-              @click="markAsPaid(item.id)"
-            >
-              Mark as Paid
-            </v-btn>
-          </template>
-        </v-data-table>
-      </v-container>
-    </v-main>
-  </v-app>
+      <template v-slot:item.status="{ item }">
+        <v-select
+          v-model="item.raw.status"
+          :items="plotStatuses"
+          density="compact"
+          hide-details
+          variant="outlined"
+          style="min-width: 140px;"
+        />
+      </template>
+
+      <template v-slot:item.actions="{ item }">
+        <div class="d-flex ga-2">
+          <v-btn
+            v-if="!item.raw.paymentVerified"
+            size="small"
+            color="success"
+            @click="markAsPaid(item.raw.id)"
+          >
+            Mark as Paid
+          </v-btn>
+          <v-btn
+            size="small"
+            color="primary"
+            variant="outlined"
+            @click="savePlot(item.raw)"
+          >
+            Save
+          </v-btn>
+        </div>
+      </template>
+    </v-data-table>
+  </v-card>
 </template>

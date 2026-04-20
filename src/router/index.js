@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import { auth } from '@/services/firebaseConfig';
+import { auth, database } from '@/services/firebaseConfig';
+import { get, ref as dbRef } from 'firebase/database';
+import { signOut } from 'firebase/auth';
 
 // Public pages
 const Home = () => import('@/pages/Home.vue');
@@ -9,9 +11,6 @@ const ReturningGardenerForm = () => import('@/pages/ReturningGardenerForm.vue');
 // Admin pages
 const AdminLogin = () => import('@/pages/AdminLogin.vue');
 const AdminDashboard = () => import('@/pages/AdminDashboard.vue');
-const PlotManagement = () => import('@/pages/PlotManagement.vue');
-const GardenerManagement = () => import('@/pages/GardenerManagement.vue');
-const CMSEditor = () => import('@/pages/CMSEditor.vue');
 
 const routes = [
   {
@@ -42,21 +41,15 @@ const routes = [
   },
   {
     path: '/admin/plots',
-    name: 'PlotManagement',
-    component: PlotManagement,
-    meta: { requiresAuth: true }
+    redirect: '/admin'
   },
   {
     path: '/admin/gardeners',
-    name: 'GardenerManagement',
-    component: GardenerManagement,
-    meta: { requiresAuth: true }
+    redirect: '/admin'
   },
   {
     path: '/admin/cms',
-    name: 'CMSEditor',
-    component: CMSEditor,
-    meta: { requiresAuth: true }
+    redirect: '/admin'
   }
 ];
 
@@ -68,11 +61,22 @@ const router = createRouter({
 // Navigation guard for protected routes
 router.beforeEach((to, from, next) => {
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
-  
+
   if (requiresAuth) {
     auth.onAuthStateChanged(user => {
       if (user) {
-        next();
+        get(dbRef(database, `admins/${user.uid}`))
+          .then((snapshot) => {
+            if (snapshot.exists()) {
+              next();
+            } else {
+              signOut(auth).finally(() => next('/admin/login?not-admin=1'));
+            }
+          })
+          .catch((error) => {
+            console.error('Admin check failed:', error);
+            next('/admin/login');
+          });
       } else {
         next('/admin/login');
       }

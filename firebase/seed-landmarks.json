@@ -1,0 +1,52 @@
+{
+  "landmarks": {
+    "compost": {
+      "name": "Compost",
+      "type": "feature",
+      "x": 70,
+      "y": 2088,
+      "width": 52,
+      "height": 208
+    },
+    "shed": {
+      "name": "Shed",
+      "type": "building",
+      "x": 70,
+      "y": 2324,
+      "width": 120,
+      "height": 56
+    },
+    "picnic-table-1": {
+      "name": "Picnic table",
+      "type": "feature",
+      "x": 300,
+      "y": 2324,
+      "width": 76,
+      "height": 56
+    },
+    "picnic-table-2": {
+      "name": "Picnic table",
+      "type": "feature",
+      "x": 388,
+      "y": 2324,
+      "width": 76,
+      "height": 56
+    },
+    "portapotty": {
+      "name": "Portapotty",
+      "type": "feature",
+      "x": 853.5,
+      "y": 2322,
+      "width": 60,
+      "height": 60
+    },
+    "mentoring-area": {
+      "name": "Mentoring area",
+      "type": "feature",
+      "x": 70,
+      "y": 3890,
+      "width": 156,
+      "height": 156
+    }
+  }
+}

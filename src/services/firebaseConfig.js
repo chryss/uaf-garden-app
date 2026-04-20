@@ -3,14 +3,14 @@ import { getAuth } from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAMSsOkF8nPWXfAyWHADEnCB4y047_Pdec",
-  authDomain: "uaf-garden.firebaseapp.com",
-  databaseURL: "https://uaf-garden.firebaseio.com",
-  projectId: "uaf-garden",
-  storageBucket: "uaf-garden.firebasestorage.app",
-  messagingSenderId: "656376107336",
-  appId: "1:656376107336:web:043031229c2a73d608a37d",
-  measurementId: "G-1C8TN2CXEN"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 const app = initializeApp(firebaseConfig);

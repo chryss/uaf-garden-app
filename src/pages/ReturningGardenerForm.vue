@@ -1,11 +1,12 @@
 <script setup>
 import { ref } from 'vue';
 import { database } from '@/services/firebaseConfig';
-import { ref as dbRef, push } from 'firebase/database';
+import { ref as dbRef, set } from 'firebase/database';
 
 const form = ref({
   firstName: '',
   lastName: '',
+  email: '',
   affiliation: '',
   studentType: '',
   hadPlotLastYear: false,
@@ -26,40 +27,100 @@ const studentTypeOptions = ['Graduate', 'Undergraduate'];
 const loading = ref(false);
 const submitted = ref(false);
 
+const emailKeyFromEmail = (email) =>
+  email
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, (char) => `_${char.charCodeAt(0)}_`);
+
+const resetForm = () => {
+  form.value = {
+    firstName: '',
+    lastName: '',
+    email: '',
+    affiliation: '',
+    studentType: '',
+    hadPlotLastYear: false,
+    plotNumbers: '',
+    forgotPlotNumber: false,
+    lastYearName: '',
+    lastYearEmail: '',
+    sharingPlot: false,
+    partnerName: '',
+    partnerEmail: '',
+    agreeRules: false,
+    agreeLiability: false
+  };
+};
+
 const submit = async () => {
-  // Validate required fields
-  if (!form.value.firstName || !form.value.lastName || !form.value.affiliation) {
-    alert('Please fill in all required fields');
+  if (!form.value.firstName || !form.value.lastName || !form.value.email || !form.value.affiliation) {
+    alert('Please fill in first name, last name, email, and UAF affiliation.');
     return;
   }
+
+  if (form.value.affiliation === 'Student' && !form.value.studentType) {
+    alert('Please select your student type.');
+    return;
+  }
+
+  if (!form.value.hadPlotLastYear) {
+    alert('Please confirm whether you had a plot last year.');
+    return;
+  }
+
+  if (form.value.hadPlotLastYear && !form.value.forgotPlotNumber && !form.value.plotNumbers.trim()) {
+    alert('Please enter your previous plot number, or check that you forgot it.');
+    return;
+  }
+
+  if (form.value.sharingPlot && !form.value.partnerName.trim()) {
+    alert('Please enter the name of the person sharing your plot.');
+    return;
+  }
+
   if (!form.value.agreeRules || !form.value.agreeLiability) {
-    alert('Please agree to the rules and liability waiver');
+    alert('Please agree to the Garden Rules and Liability Waiver.');
     return;
   }
 
   loading.value = true;
+
   try {
-    const returningRef = dbRef(database, 'returning-gardeners');
-    await push(returningRef, {
-      firstName: form.value.firstName,
-      lastName: form.value.lastName,
+    const normalizedEmail = form.value.email.trim().toLowerCase();
+    const submissionRef = dbRef(database, `returning-gardeners/${emailKeyFromEmail(normalizedEmail)}`);
+
+    await set(submissionRef, {
+      firstName: form.value.firstName.trim(),
+      lastName: form.value.lastName.trim(),
+      email: normalizedEmail,
       affiliation: form.value.affiliation,
       studentType: form.value.affiliation === 'Student' ? form.value.studentType : null,
       hadPlotLastYear: form.value.hadPlotLastYear,
-      plotNumbers: form.value.hadPlotLastYear && !form.value.forgotPlotNumber ? form.value.plotNumbers : null,
-      forgotPlotNumber: form.value.forgotPlotNumber,
-      lastYearName: form.value.hadPlotLastYear ? form.value.lastYearName : null,
-      lastYearEmail: form.value.hadPlotLastYear ? form.value.lastYearEmail : null,
+      plotNumbers:
+        form.value.hadPlotLastYear && !form.value.forgotPlotNumber
+          ? form.value.plotNumbers.trim()
+          : null,
+      forgotPlotNumber: form.value.hadPlotLastYear ? form.value.forgotPlotNumber : false,
+      lastYearName: form.value.hadPlotLastYear ? form.value.lastYearName.trim() || null : null,
+      lastYearEmail:
+        form.value.hadPlotLastYear && form.value.lastYearEmail.trim()
+          ? form.value.lastYearEmail.trim().toLowerCase()
+          : null,
       sharingPlot: form.value.sharingPlot,
-      partner: form.value.sharingPlot ? {
-        name: form.value.partnerName,
-        email: form.value.partnerEmail
-      } : null,
+      partner: form.value.sharingPlot
+        ? {
+            name: form.value.partnerName.trim(),
+            email: form.value.partnerEmail.trim().toLowerCase() || null
+          }
+        : null,
       agreeRules: form.value.agreeRules,
       agreeLiability: form.value.agreeLiability,
-      createdAt: new Date().toISOString()
+      updatedAt: new Date().toISOString()
     });
+
     submitted.value = true;
+    resetForm();
   } catch (error) {
     console.error('Error submitting form:', error);
     alert('Error submitting form. Please try again.');
@@ -72,76 +133,85 @@ const submit = async () => {
 <template>
   <v-container class="mt-8">
     <v-card class="pa-8">
-      <v-card-title class="text-h4 mb-8">Returning Gardener Interest Form</v-card-title>
+      <v-card-title class="text-h4 mb-4">Returning Gardener Form</v-card-title>
 
-      <v-alert v-if="submitted" type="success" class="mb-6">
-        Thank you for submitting your interest form! We'll be in touch soon.
+      <v-alert type="info" variant="tonal" class="mb-6">
+        If you submit this form more than once with the same email address, your previous submission will be overwritten.
       </v-alert>
 
-      <v-form @submit.prevent="submit" v-if="!submitted">
-        <!-- Basic Info -->
+      <v-alert v-if="submitted" type="success" class="mb-6">
+        Thank you for submitting your returning gardener interest form. We will follow up by email.
+      </v-alert>
+
+      <v-form v-if="!submitted" @submit.prevent="submit">
         <v-row>
           <v-col cols="12" md="6">
             <v-text-field
               v-model="form.firstName"
-              label="First Name"
+              label="First Name (required)"
               required
             ></v-text-field>
           </v-col>
           <v-col cols="12" md="6">
             <v-text-field
               v-model="form.lastName"
-              label="Last Name"
+              label="Last Name (required)"
+              required
+            ></v-text-field>
+          </v-col>
+          <v-col cols="12">
+            <v-text-field
+              v-model="form.email"
+              label="Email (required)"
+              type="email"
               required
             ></v-text-field>
           </v-col>
         </v-row>
 
-        <!-- UAF Affiliation -->
         <v-row>
           <v-col cols="12" md="6">
             <v-select
               v-model="form.affiliation"
               :items="affiliationOptions"
-              label="UAF Affiliation"
+              label="UAF Affiliation (required)"
               required
             ></v-select>
           </v-col>
-          <v-col cols="12" md="6" v-if="form.affiliation === 'Student'">
+          <v-col v-if="form.affiliation === 'Student'" cols="12" md="6">
             <v-select
               v-model="form.studentType"
               :items="studentTypeOptions"
-              label="Student Type"
+              label="Student Type (required)"
               required
             ></v-select>
           </v-col>
         </v-row>
 
-        <!-- Previous Plot Info -->
-        <v-row>
+        <v-row class="mt-4">
           <v-col cols="12">
-            <v-checkbox
-              v-model="form.hadPlotLastYear"
-              label="I had a plot last year"
-            ></v-checkbox>
+            <label class="agreement-checkbox">
+              <input v-model="form.hadPlotLastYear" type="checkbox" />
+              <span class="agreement-checkbox__box" aria-hidden="true"></span>
+              <span class="agreement-checkbox__label">I had a plot last year (required).</span>
+            </label>
           </v-col>
         </v-row>
 
-        <v-card v-if="form.hadPlotLastYear" class="mb-6 pa-4">
-          <v-row>
-            <v-col cols="12">
-              <v-checkbox
-                v-model="form.forgotPlotNumber"
-                label="I forgot my plot number(s)"
-              ></v-checkbox>
-            </v-col>
-          </v-row>
+        <v-card v-if="form.hadPlotLastYear" class="mb-6 pa-4" variant="outlined">
+          <label class="agreement-checkbox">
+            <input v-model="form.forgotPlotNumber" type="checkbox" />
+            <span class="agreement-checkbox__box" aria-hidden="true"></span>
+            <span class="agreement-checkbox__label">I forgot my plot number.</span>
+          </label>
 
-          <v-row v-if="!form.forgotPlotNumber">
+          <v-row v-if="!form.forgotPlotNumber" class="mt-2">
             <v-col cols="12">
               <v-text-field
                 v-model="form.plotNumbers"
-                label="Plot Number(s)"
+                label="Plot number(s)/letter(s)"
+                hint="Use the plot identifiers you remember from last season."
+                persistent-hint
               ></v-text-field>
             </v-col>
           </v-row>
@@ -150,67 +220,63 @@ const submit = async () => {
             <v-col cols="12" md="6">
               <v-text-field
                 v-model="form.lastYearName"
-                label="Last Year's Name"
+                label="Last year's name"
               ></v-text-field>
             </v-col>
             <v-col cols="12" md="6">
               <v-text-field
                 v-model="form.lastYearEmail"
-                label="Last Year's Email"
+                label="Last year's email (if different)"
                 type="email"
               ></v-text-field>
             </v-col>
           </v-row>
         </v-card>
 
-        <!-- Sharing Plot -->
-        <v-row>
+        <v-row class="mt-4">
           <v-col cols="12">
-            <v-checkbox
-              v-model="form.sharingPlot"
-              label="I will be sharing my plot"
-            ></v-checkbox>
+            <label class="agreement-checkbox">
+              <input v-model="form.sharingPlot" type="checkbox" />
+              <span class="agreement-checkbox__box" aria-hidden="true"></span>
+              <span class="agreement-checkbox__label">I will be sharing my plot.</span>
+            </label>
           </v-col>
         </v-row>
 
-        <v-card v-if="form.sharingPlot" class="mb-6 pa-4">
+        <v-card v-if="form.sharingPlot" class="mb-6 pa-4" variant="outlined">
           <v-row>
             <v-col cols="12" md="6">
               <v-text-field
                 v-model="form.partnerName"
-                label="Partner Name"
+                label="Partner name"
               ></v-text-field>
             </v-col>
             <v-col cols="12" md="6">
               <v-text-field
                 v-model="form.partnerEmail"
-                label="Partner Email"
+                label="Partner email"
                 type="email"
               ></v-text-field>
             </v-col>
           </v-row>
         </v-card>
 
-        <!-- Agreements -->
         <v-row class="mt-6">
           <v-col cols="12">
-            <v-checkbox
-              v-model="form.agreeRules"
-              label="I have read and agree to the Garden Rules and Etiquette"
-            ></v-checkbox>
+            <label class="agreement-checkbox">
+              <input v-model="form.agreeRules" type="checkbox" />
+              <span class="agreement-checkbox__box" aria-hidden="true"></span>
+              <span class="agreement-checkbox__label">I agree to the Garden Rules and Etiquette (required).</span>
+            </label>
+
+            <label class="agreement-checkbox">
+              <input v-model="form.agreeLiability" type="checkbox" />
+              <span class="agreement-checkbox__box" aria-hidden="true"></span>
+              <span class="agreement-checkbox__label">I agree to the Garden Liability Waiver (required).</span>
+            </label>
           </v-col>
         </v-row>
 
-        <v-row>
-          <v-col cols="12">
-            <v-checkbox
-              v-model="form.agreeLiability"
-              label="I have read and agree to the terms in the Garden Liability Waiver"
-            ></v-checkbox>
-          </v-col>
-        </v-row>
-
-        <!-- Submit -->
         <v-row class="mt-8">
           <v-col cols="12">
             <v-btn
@@ -220,7 +286,7 @@ const submit = async () => {
               :loading="loading"
               block
             >
-              Submit Interest Form
+              Submit
             </v-btn>
           </v-col>
         </v-row>
@@ -228,3 +294,54 @@ const submit = async () => {
     </v-card>
   </v-container>
 </template>
+
+<style scoped>
+.agreement-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.agreement-checkbox input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.agreement-checkbox__box {
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgb(25, 118, 210);
+  border-radius: 4px;
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 22px;
+}
+
+.agreement-checkbox__box::after {
+  content: '';
+  width: 6px;
+  height: 12px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  opacity: 0;
+}
+
+.agreement-checkbox input:checked + .agreement-checkbox__box {
+  background: rgb(25, 118, 210);
+}
+
+.agreement-checkbox input:checked + .agreement-checkbox__box::after {
+  opacity: 1;
+}
+
+.agreement-checkbox__label {
+  line-height: 1.4;
+}
+</style>

@@ -1,0 +1,220 @@
+{
+  "landmarks": [
+    {
+      "type": "landmark",
+      "color": "#00c2a8",
+      "x": -240.0,
+      "y": 46.0,
+      "width": 168.0,
+      "height": 48.0,
+      "id": "landmark-0"
+    },
+    {
+      "type": "landmark",
+      "color": "#dfe3e8",
+      "x": -214.0,
+      "y": 3120.0,
+      "width": 48.0,
+      "height": 308.0,
+      "id": "landmark-1"
+    },
+    {
+      "type": "landmark",
+      "color": "#dfe3e8",
+      "x": 20.0,
+      "y": 3226.0,
+      "width": 88.0,
+      "height": 148.0,
+      "id": "landmark-2"
+    },
+    {
+      "type": "landmark",
+      "color": "#dfe3e8",
+      "x": 160.0,
+      "y": 3226.0,
+      "width": 88.0,
+      "height": 148.0,
+      "id": "landmark-3"
+    },
+    {
+      "type": "landmark",
+      "color": "#dfe3e8",
+      "x": 460.0,
+      "y": 3226.0,
+      "width": 88.0,
+      "height": 88.0,
+      "id": "landmark-4"
+    },
+    {
+      "type": "landmark",
+      "color": "#dfe3e8",
+      "x": -220.0,
+      "y": 5446.0,
+      "width": 168.0,
+      "height": 168.0,
+      "id": "landmark-5"
+    },
+    {
+      "type": "landmark",
+      "color": "#e08fff",
+      "x": -220.0,
+      "y": 5666.0,
+      "width": 168.0,
+      "height": 48.0,
+      "id": "landmark-6"
+    },
+    {
+      "type": "landmark",
+      "color": "#e08fff",
+      "x": -220.0,
+      "y": 5766.0,
+      "width": 168.0,
+      "height": 48.0,
+      "id": "landmark-7"
+    },
+    {
+      "type": "landmark",
+      "color": "#00c2a8",
+      "x": -220.0,
+      "y": 6266.0,
+      "width": 168.0,
+      "height": 48.0,
+      "id": "landmark-8"
+    },
+    {
+      "type": "landmark",
+      "color": "#00c2a8",
+      "x": -220.0,
+      "y": 6366.0,
+      "width": 168.0,
+      "height": 48.0,
+      "id": "landmark-9"
+    },
+    {
+      "type": "landmark",
+      "color": "#00c2a8",
+      "x": 180.0,
+      "y": 6366.0,
+      "width": 168.0,
+      "height": 48.0,
+      "id": "landmark-10"
+    },
+    {
+      "type": "landmark",
+      "color": "#00c2a8",
+      "x": -220.0,
+      "y": 6466.0,
+      "width": 168.0,
+      "height": 48.0,
+      "id": "landmark-11"
+    },
+    {
+      "type": "landmark",
+      "color": "#cfe4ff",
+      "x": 180.0,
+      "y": 6466.0,
+      "width": 168.0,
+      "height": 48.0,
+      "id": "landmark-12"
+    },
+    {
+      "type": "landmark",
+      "color": "#cfe4ff",
+      "x": 486.0,
+      "y": 6520.0,
+      "width": 48.0,
+      "height": 168.0,
+      "id": "landmark-13"
+    },
+    {
+      "type": "landmark",
+      "color": "#00c2a8",
+      "x": -220.0,
+      "y": 6706.0,
+      "width": 168.0,
+      "height": 48.0,
+      "id": "landmark-14"
+    },
+    {
+      "type": "landmark",
+      "color": "#00c2a8",
+      "x": 486.0,
+      "y": 6820.0,
+      "width": 48.0,
+      "height": 168.0,
+      "id": "landmark-15"
+    },
+    {
+      "type": "landmark",
+      "color": "#00c2a8",
+      "x": -220.0,
+      "y": 6836.0,
+      "width": 168.0,
+      "height": 48.0,
+      "id": "landmark-16"
+    },
+    {
+      "type": "landmark",
+      "color": "#c3f7c8",
+      "x": 180.0,
+      "y": 6876.0,
+      "width": 168.0,
+      "height": 48.0,
+      "id": "landmark-17"
+    },
+    {
+      "type": "landmark",
+      "color": "#e08fff",
+      "x": -220.0,
+      "y": 6966.0,
+      "width": 168.0,
+      "height": 48.0,
+      "id": "landmark-18"
+    },
+    {
+      "type": "landmark",
+      "color": "#cfe4ff",
+      "x": 180.0,
+      "y": 6986.0,
+      "width": 168.0,
+      "height": 48.0,
+      "id": "landmark-19"
+    },
+    {
+      "type": "landmark",
+      "color": "#00c2a8",
+      "x": 486.0,
+      "y": 7040.0,
+      "width": 48.0,
+      "height": 168.0,
+      "id": "landmark-20"
+    },
+    {
+      "type": "landmark",
+      "color": "#e08fff",
+      "x": -220.0,
+      "y": 7086.0,
+      "width": 168.0,
+      "height": 48.0,
+      "id": "landmark-21"
+    },
+    {
+      "type": "landmark",
+      "color": "#e08fff",
+      "x": 486.0,
+      "y": 7260.0,
+      "width": 48.0,
+      "height": 168.0,
+      "id": "landmark-22"
+    },
+    {
+      "type": "landmark",
+      "color": "#dfe3e8",
+      "x": -220.0,
+      "y": 7866.0,
+      "width": 168.0,
+      "height": 168.0,
+      "id": "landmark-23"
+    }
+  ]
+}

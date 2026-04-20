@@ -1,14 +1,12 @@
 <script setup>
 import { ref, onMounted } from 'vue';
-import { database, auth } from '@/services/firebaseConfig';
+import { database } from '@/services/firebaseConfig';
 import { ref as dbRef, get } from 'firebase/database';
-import { signOut } from 'firebase/auth';
-import { useRouter } from 'vue-router';
 
-const router = useRouter();
 const gardeners = ref([]);
 const returningGardeners = ref([]);
 const loading = ref(true);
+const activeTab = ref('new');
 
 const loadData = async () => {
   try {
@@ -36,62 +34,45 @@ const loadData = async () => {
   }
 };
 
-const logout = async () => {
-  try {
-    await signOut(auth);
-    router.push('/admin/login');
-  } catch (error) {
-    console.error('Logout error:', error);
-  }
-};
-
 onMounted(loadData);
 </script>
 
 <template>
-  <v-app>
-    <v-app-bar color="primary">
-      <v-app-bar-title>Gardener Management</v-app-bar-title>
-      <v-spacer></v-spacer>
-      <v-btn icon @click="logout">
-        <v-icon>mdi-logout</v-icon>
-      </v-btn>
-    </v-app-bar>
+  <v-card class="pa-6">
+    <v-card-title class="text-h5 px-0">Returning gardener management</v-card-title>
 
-    <v-main>
-      <v-container class="mt-8">
-        <v-tabs>
-          <v-tab>New Registrations</v-tab>
-          <v-tab>Returning Gardeners</v-tab>
+    <v-tabs v-model="activeTab" color="primary">
+      <v-tab value="new">New registrations</v-tab>
+      <v-tab value="returning">Returning gardeners</v-tab>
+    </v-tabs>
 
-          <v-tab-item>
-            <v-data-table
-              :headers="[
-                { title: 'Name', key: 'lastName' },
-                { title: 'Email', key: 'email' },
-                { title: 'Plot ID', key: 'plotId' },
-                { title: 'Payment Verified', key: 'paymentVerified' }
-              ]"
-              :items="gardeners"
-              :loading="loading"
-              class="elevation-1"
-            ></v-data-table>
-          </v-tab-item>
+    <v-window v-model="activeTab" class="mt-4">
+      <v-window-item value="new">
+        <v-data-table
+          :headers="[
+            { title: 'Name', key: 'lastName' },
+            { title: 'Email', key: 'email' },
+            { title: 'Plot ID', key: 'plotId' },
+            { title: 'Payment Verified', key: 'paymentVerified' }
+          ]"
+          :items="gardeners"
+          :loading="loading"
+          class="elevation-1"
+        ></v-data-table>
+      </v-window-item>
 
-          <v-tab-item>
-            <v-data-table
-              :headers="[
-                { title: 'Name', key: 'lastName' },
-                { title: 'Affiliation', key: 'affiliation' },
-                { title: 'Had Plot', key: 'hadPlotLastYear' }
-              ]"
-              :items="returningGardeners"
-              :loading="loading"
-              class="elevation-1"
-            ></v-data-table>
-          </v-tab-item>
-        </v-tabs>
-      </v-container>
-    </v-main>
-  </v-app>
+      <v-window-item value="returning">
+        <v-data-table
+          :headers="[
+            { title: 'Name', key: 'lastName' },
+            { title: 'Affiliation', key: 'affiliation' },
+            { title: 'Had Plot', key: 'hadPlotLastYear' }
+          ]"
+          :items="returningGardeners"
+          :loading="loading"
+          class="elevation-1"
+        ></v-data-table>
+      </v-window-item>
+    </v-window>
+  </v-card>
 </template>
