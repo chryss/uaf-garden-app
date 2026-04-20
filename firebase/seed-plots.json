@@ -1,0 +1,24 @@
+{
+  "plots": {
+    "plot-1": { "name": "Plot 1", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p1", "meta": { "size": "10x10" } },
+    "plot-2": { "name": "Plot 2", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p2", "meta": { "size": "10x10" } },
+    "plot-3": { "name": "Plot 3", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p3", "meta": { "size": "10x10" } },
+    "plot-4": { "name": "Plot 4", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p4", "meta": { "size": "10x10" } },
+    "plot-5": { "name": "Plot 5", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p5", "meta": { "size": "10x10" } },
+    "plot-6": { "name": "Plot 6", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p6", "meta": { "size": "10x10" } },
+    "plot-7": { "name": "Plot 7", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p7", "meta": { "size": "10x10" } },
+    "plot-8": { "name": "Plot 8", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p8", "meta": { "size": "10x10" } },
+    "plot-9": { "name": "Plot 9", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p9", "meta": { "size": "10x10" } },
+    "plot-10": { "name": "Plot 10", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p10", "meta": { "size": "10x10" } },
+    "plot-11": { "name": "Plot 11", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p11", "meta": { "size": "10x10" } },
+    "plot-12": { "name": "Plot 12", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p12", "meta": { "size": "10x10" } },
+    "plot-13": { "name": "Plot 13", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p13", "meta": { "size": "10x10" } },
+    "plot-14": { "name": "Plot 14", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p14", "meta": { "size": "10x10" } },
+    "plot-15": { "name": "Plot 15", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p15", "meta": { "size": "10x10" } },
+    "plot-16": { "name": "Plot 16", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p16", "meta": { "size": "10x10" } },
+    "plot-17": { "name": "Plot 17", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p17", "meta": { "size": "10x10" } },
+    "plot-18": { "name": "Plot 18", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p18", "meta": { "size": "10x10" } },
+    "plot-19": { "name": "Plot 19", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p19", "meta": { "size": "10x10" } },
+    "plot-20": { "name": "Plot 20", "status": "available", "registeredGardenerId": null, "paymentVerified": false, "svgId": "p20", "meta": { "size": "10x10" } }
+  }
+}

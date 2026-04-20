@@ -1,0 +1,56 @@
+# Copilot setup instructions (project metadata & common commands)
+# This file is for developer convenience and for Copilot Cloud Agent to understand project basics.
+# Do NOT store secrets here. Use .env.local (gitignored) for private keys.
+
+project: uaf-garden-app
+description: "Vue 3 + Vuetify frontend with Firebase Realtime DB and Firebase Hosting."
+
+# Recommended local env variables (create .env.local from .env.example)
+env_example:
+  VITE_FIREBASE_API_KEY: "REPLACE_WITH_API_KEY"
+  VITE_FIREBASE_AUTH_DOMAIN: "uaf-garden.firebaseapp.com"
+  VITE_FIREBASE_DATABASE_URL: "https://uaf-garden.firebaseio.com"
+  VITE_FIREBASE_PROJECT_ID: "uaf-garden"
+  VITE_FIREBASE_STORAGE_BUCKET: "uaf-garden.firebasestorage.app"
+  VITE_FIREBASE_MESSAGING_SENDER_ID: "656376107336"
+  VITE_FIREBASE_APP_ID: "1:656376107336:web:..."
+
+# Key repo files
+files:
+  - src/services/firebaseConfig.js
+  - src/router/index.js
+  - src/plugins/vuetify.js
+  - src/pages/*.vue
+  - firebase/seed-plots.json
+  - firebase/database.rules.json
+  - scripts/seedFromJson.js
+
+# Useful commands
+commands:
+  - name: Install dependencies
+    cmd: npm install
+  - name: Start dev server
+    cmd: npm run dev
+  - name: Build (production)
+    cmd: npm run build
+  - name: Seed local Firebase (uses src/services/firebaseConfig.js)
+    cmd: node scripts/seedFromJson.js
+    note: "Run only against a development Firebase project. Do NOT seed production unless intended."
+  - name: Deploy to Firebase Hosting
+    cmd: firebase deploy --only hosting
+
+# Notes for Copilot / maintainers
+notes:
+  - Use an environment-specific Firebase project for development/testing to avoid overwriting production data.
+  - Keep .env.local (or any files containing API keys) in .gitignore.
+  - The seed script writes to the configured Firebase project. Confirm src/services/firebaseConfig.js before running.
+  - To allow the admin UI to work, add admin user(s) in the Firebase Console and add a corresponding entry under /admins in Realtime DB with the admin's uid.
+
+# Optional: CI steps (example)
+ci:
+  - name: Install
+    run: npm ci
+  - name: Build
+    run: npm run build
+
+# End of copilot-setup-steps.yml
