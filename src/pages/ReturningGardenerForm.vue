@@ -1,13 +1,15 @@
 <script setup>
 import { ref } from 'vue';
+import PublicPageHeader from '@/components/PublicPageHeader.vue';
+import UafAffiliationSelector from '@/components/UafAffiliationSelector.vue';
 import { database } from '@/services/firebaseConfig';
-import { ref as dbRef, set } from 'firebase/database';
+import { ref as dbRef, get, set } from 'firebase/database';
 
 const form = ref({
   firstName: '',
   lastName: '',
   email: '',
-  affiliation: '',
+  affiliations: [],
   studentType: '',
   hadPlotLastYear: false,
   plotNumbers: '',
@@ -21,11 +23,10 @@ const form = ref({
   agreeLiability: false
 });
 
-const affiliationOptions = ['Student', 'Faculty', 'Staff', 'Emeriti', 'None'];
-const studentTypeOptions = ['Graduate', 'Undergraduate'];
-
 const loading = ref(false);
 const submitted = ref(false);
+const registrationOpen = ref(false);
+const settingsLoaded = ref(false);
 
 const emailKeyFromEmail = (email) =>
   email
@@ -38,7 +39,7 @@ const resetForm = () => {
     firstName: '',
     lastName: '',
     email: '',
-    affiliation: '',
+    affiliations: [],
     studentType: '',
     hadPlotLastYear: false,
     plotNumbers: '',
@@ -53,13 +54,25 @@ const resetForm = () => {
   };
 };
 
+const loadCmsSettings = async () => {
+  try {
+    const cmsRef = dbRef(database, 'cms');
+    const snapshot = await get(cmsRef);
+    if (snapshot.exists()) {
+      registrationOpen.value = snapshot.val().registrationOpen === true;
+    }
+  } finally {
+    settingsLoaded.value = true;
+  }
+};
+
 const submit = async () => {
-  if (!form.value.firstName || !form.value.lastName || !form.value.email || !form.value.affiliation) {
+  if (!form.value.firstName || !form.value.lastName || !form.value.email || !form.value.affiliations.length) {
     alert('Please fill in first name, last name, email, and UAF affiliation.');
     return;
   }
 
-  if (form.value.affiliation === 'Student' && !form.value.studentType) {
+  if (form.value.affiliations.includes('Student') && !form.value.studentType) {
     alert('Please select your student type.');
     return;
   }
@@ -91,11 +104,13 @@ const submit = async () => {
     const submissionRef = dbRef(database, `returning-gardeners/${emailKeyFromEmail(normalizedEmail)}`);
 
     await set(submissionRef, {
+      status: 'incomplete',
       firstName: form.value.firstName.trim(),
       lastName: form.value.lastName.trim(),
       email: normalizedEmail,
-      affiliation: form.value.affiliation,
-      studentType: form.value.affiliation === 'Student' ? form.value.studentType : null,
+      affiliations: form.value.affiliations,
+      affiliation: form.value.affiliations[0] || null,
+      studentType: form.value.affiliations.includes('Student') ? form.value.studentType : null,
       hadPlotLastYear: form.value.hadPlotLastYear,
       plotNumbers:
         form.value.hadPlotLastYear && !form.value.forgotPlotNumber
@@ -128,23 +143,33 @@ const submit = async () => {
     loading.value = false;
   }
 };
+
+loadCmsSettings();
 </script>
 
 <template>
   <v-container class="mt-8">
     <v-card class="pa-8">
-      <v-card-title class="text-h4 mb-4">Returning Gardener Form</v-card-title>
+      <PublicPageHeader
+        title="Returning Gardener Form"
+        subtitle="Let us know if you’d like to keep your plot from last year."
+        show-home-link
+      />
 
       <v-alert type="info" variant="tonal" class="mb-6">
         If you submit this form more than once with the same email address, your previous submission will be overwritten.
       </v-alert>
 
-      <v-alert v-if="submitted" type="success" class="mb-6">
-        Thank you for submitting your returning gardener interest form. We will follow up by email.
-      </v-alert>
+      <template v-if="settingsLoaded && registrationOpen">
+        <v-alert v-if="submitted" type="success" class="mb-6">
+          Thank you for submitting your returning gardener interest form. We will follow up by email.
+        </v-alert>
 
-      <v-form v-if="!submitted" @submit.prevent="submit">
+        <v-form v-if="!submitted" @submit.prevent="submit">
         <v-row>
+          <v-col cols="12">
+            <h3 class="form-section-title">Gardener Information</h3>
+          </v-col>
           <v-col cols="12" md="6">
             <v-text-field
               v-model="form.firstName"
@@ -169,32 +194,26 @@ const submit = async () => {
           </v-col>
         </v-row>
 
-        <v-row>
-          <v-col cols="12" md="6">
-            <v-select
-              v-model="form.affiliation"
-              :items="affiliationOptions"
-              label="UAF Affiliation (required)"
-              required
-            ></v-select>
-          </v-col>
-          <v-col v-if="form.affiliation === 'Student'" cols="12" md="6">
-            <v-select
-              v-model="form.studentType"
-              :items="studentTypeOptions"
-              label="Student Type (required)"
-              required
-            ></v-select>
+        <UafAffiliationSelector
+          v-model="form.affiliations"
+          v-model:student-type="form.studentType"
+        />
+
+        <v-row class="mt-8">
+          <v-col cols="12">
+            <h3 class="form-section-title">Please check all that apply</h3>
           </v-col>
         </v-row>
 
-        <v-row class="mt-4">
+        <v-row class="mt-2">
           <v-col cols="12">
-            <label class="agreement-checkbox">
-              <input v-model="form.hadPlotLastYear" type="checkbox" />
-              <span class="agreement-checkbox__box" aria-hidden="true"></span>
-              <span class="agreement-checkbox__label">I had a plot last year (required).</span>
-            </label>
+            <div class="form-soft-panel">
+              <label class="agreement-checkbox">
+                <input v-model="form.hadPlotLastYear" type="checkbox" />
+                <span class="agreement-checkbox__box" aria-hidden="true"></span>
+                <span class="agreement-checkbox__label">I had a plot last year (required).</span>
+              </label>
+            </div>
           </v-col>
         </v-row>
 
@@ -233,13 +252,15 @@ const submit = async () => {
           </v-row>
         </v-card>
 
-        <v-row class="mt-4">
+        <v-row class="mt-6">
           <v-col cols="12">
-            <label class="agreement-checkbox">
-              <input v-model="form.sharingPlot" type="checkbox" />
-              <span class="agreement-checkbox__box" aria-hidden="true"></span>
-              <span class="agreement-checkbox__label">I will be sharing my plot.</span>
-            </label>
+            <div class="form-soft-panel">
+              <label class="agreement-checkbox">
+                <input v-model="form.sharingPlot" type="checkbox" />
+                <span class="agreement-checkbox__box" aria-hidden="true"></span>
+                <span class="agreement-checkbox__label">I will be sharing my plot.</span>
+              </label>
+            </div>
           </v-col>
         </v-row>
 
@@ -261,19 +282,21 @@ const submit = async () => {
           </v-row>
         </v-card>
 
-        <v-row class="mt-6">
+        <v-row class="mt-8">
           <v-col cols="12">
-            <label class="agreement-checkbox">
-              <input v-model="form.agreeRules" type="checkbox" />
-              <span class="agreement-checkbox__box" aria-hidden="true"></span>
-              <span class="agreement-checkbox__label">I agree to the Garden Rules and Etiquette (required).</span>
-            </label>
+            <div class="form-soft-panel">
+              <label class="agreement-checkbox">
+                <input v-model="form.agreeRules" type="checkbox" />
+                <span class="agreement-checkbox__box" aria-hidden="true"></span>
+                <span class="agreement-checkbox__label">I agree to the Garden Rules and Etiquette (required).</span>
+              </label>
 
-            <label class="agreement-checkbox">
-              <input v-model="form.agreeLiability" type="checkbox" />
-              <span class="agreement-checkbox__box" aria-hidden="true"></span>
-              <span class="agreement-checkbox__label">I agree to the Garden Liability Waiver (required).</span>
-            </label>
+              <label class="agreement-checkbox">
+                <input v-model="form.agreeLiability" type="checkbox" />
+                <span class="agreement-checkbox__box" aria-hidden="true"></span>
+                <span class="agreement-checkbox__label">I agree to the Garden Liability Waiver (required).</span>
+              </label>
+            </div>
           </v-col>
         </v-row>
 
@@ -290,19 +313,42 @@ const submit = async () => {
             </v-btn>
           </v-col>
         </v-row>
-      </v-form>
+        </v-form>
+      </template>
+
+      <v-alert v-else-if="settingsLoaded" type="warning" variant="tonal" class="mb-6">
+        Registration is currently closed. Please wait for the homepage notice before trying again.
+      </v-alert>
     </v-card>
   </v-container>
 </template>
 
 <style scoped>
+.form-section-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #1b5e20;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid rgba(27, 94, 32, 0.18);
+}
+
+.form-soft-panel {
+  border: 1px solid rgba(27, 94, 32, 0.14);
+  border-radius: 12px;
+  background: rgba(27, 94, 32, 0.04);
+  padding: 14px 14px 4px;
+}
+
 .agreement-checkbox {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
   cursor: pointer;
   user-select: none;
+  padding: 6px 2px;
 }
 
 .agreement-checkbox input {

@@ -1,24 +1,18 @@
 <script setup>
-import { useRouter } from 'vue-router';
-import { auth } from '@/services/firebaseConfig';
-import { ref, watch } from 'vue';
+import { computed } from 'vue';
+import { useRoute } from 'vue-router';
+import PublicFooter from '@/components/PublicFooter.vue';
 
-const router = useRouter();
-const isAdmin = ref(false);
-
-// Check if current user is authenticated
-watch(() => router.currentRoute.value, (route) => {
-  isAdmin.value = route.path.startsWith('/admin');
-});
-
-auth.onAuthStateChanged(user => {
-  // Auth state updates handled here
-});
+const route = useRoute();
+const isPublicRoute = computed(() => !route.path.startsWith('/admin'));
 </script>
 
 <template>
   <v-app>
-    <router-view />
+    <router-view v-slot="{ Component, route: currentRoute }">
+      <component :is="Component" :key="currentRoute.fullPath" />
+    </router-view>
+    <PublicFooter v-if="isPublicRoute" />
   </v-app>
 </template>
 

@@ -68,22 +68,48 @@ const auth = getAuth(app);
 const database = getDatabase(app);
 
 const plotsJson = readJson('./firebase/seed-plots.json');
+const cmsJson = fs.existsSync('./firebase/seed-cms.json')
+  ? readJson('./firebase/seed-cms.json')
+  : null;
 const landmarksJson = fs.existsSync('./firebase/seed-landmarks.json')
   ? readJson('./firebase/seed-landmarks.json')
+  : null;
+const registrationsJson = fs.existsSync('./firebase/seed-registrations.json')
+  ? readJson('./firebase/seed-registrations.json')
   : null;
 
 const seed = async () => {
   const credential = await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
 
   try {
-    if (plotsJson.plots) {
-      await set(dbRef(database, 'plots'), plotsJson.plots);
+    const mergedPlots = { ...(plotsJson.plots || {}) };
+    if (registrationsJson?.plots) {
+      Object.entries(registrationsJson.plots).forEach(([plotId, update]) => {
+        mergedPlots[plotId] = {
+          ...(mergedPlots[plotId] || {}),
+          ...update
+        };
+      });
+    }
+
+    if (Object.keys(mergedPlots).length) {
+      await set(dbRef(database, 'plots'), mergedPlots);
       console.log('Plots seeded successfully');
+    }
+
+    if (cmsJson?.cms) {
+      await set(dbRef(database, 'cms'), cmsJson.cms);
+      console.log('CMS seeded successfully');
     }
 
     if (landmarksJson?.landmarks) {
       await set(dbRef(database, 'landmarks'), landmarksJson.landmarks);
       console.log('Landmarks seeded successfully');
+    }
+
+    if (registrationsJson?.gardeners) {
+      await set(dbRef(database, 'gardeners'), registrationsJson.gardeners);
+      console.log('Gardeners seeded successfully');
     }
   } finally {
     await signOut(auth);

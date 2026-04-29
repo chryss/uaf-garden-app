@@ -1,14 +1,16 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import PlotMapCanvas from '@/components/PlotMapCanvas.vue';
+import PublicPageHeader from '@/components/PublicPageHeader.vue';
+import UafAffiliationSelector from '@/components/UafAffiliationSelector.vue';
 import { database } from '@/services/firebaseConfig';
-import { ref as dbRef, push, get } from 'firebase/database';
+import { ref as dbRef, push, get, update } from 'firebase/database';
 
 const form = ref({
   firstName: '',
   lastName: '',
   email: '',
-  affiliation: '',  // Student, Faculty, Staff, Emeriti, None
+  affiliations: [],
   studentType: '',  // Graduate, Undergraduate (only if affiliation = Student)
   plots: [{ plotId: '' }],  // Array of plot selections
   agreeRules: false,
@@ -23,11 +25,14 @@ const plots = ref([]);
 const loading = ref(false);
 const submitted = ref(false);
 const maxPlots = ref(2);  // Default, can be set from CMS
+const registrationOpen = ref(false);
+const settingsLoaded = ref(false);
 const paymentUrl = 'https://epay.alaska.edu/C21563_ustores/web/store_cat.jsp?STOREID=88&CATID=278';
-
-// Affiliation options
-const affiliationOptions = ['Student', 'Faculty', 'Staff', 'Emeriti', 'None'];
-const studentTypeOptions = ['Graduate', 'Undergraduate'];
+const selectedPlotIds = computed(() =>
+  form.value.plots
+    .map((plot) => plot.plotId)
+    .filter(Boolean)
+);
 
 // Load available plots
 const loadPlots = async () => {
@@ -38,6 +43,18 @@ const loadPlots = async () => {
       id,
       ...data
     }));
+  }
+};
+
+const loadCmsSettings = async () => {
+  try {
+    const cmsRef = dbRef(database, 'cms');
+    const snapshot = await get(cmsRef);
+    if (snapshot.exists()) {
+      registrationOpen.value = snapshot.val().registrationOpen === true;
+    }
+  } finally {
+    settingsLoaded.value = true;
   }
 };
 
@@ -75,11 +92,11 @@ const submit = async () => {
     alert('Please fill in first name, last name, and email.');
     return;
   }
-  if (!form.value.affiliation) {
+  if (!form.value.affiliations.length) {
     alert('Please select your UAF affiliation.');
     return;
   }
-  if (form.value.affiliation === 'Student' && !form.value.studentType) {
+  if (form.value.affiliations.includes('Student') && !form.value.studentType) {
     alert('Please select your student type.');
     return;
   }
@@ -87,12 +104,19 @@ const submit = async () => {
     alert('Please agree to both the Garden Rules and Liability Waiver.');
     return;
   }
-  if (!form.value.plots[0].plotId) {
+  const selectedPlotIdsForSubmission = form.value.plots.filter((p) => p.plotId).map((p) => p.plotId);
+
+  if (!selectedPlotIdsForSubmission.length) {
     alert('Please select at least one plot.');
     return;
   }
-  const selectedPlot = getSelectedPlot(form.value.plots[0].plotId);
-  if (!selectedPlot || selectedPlot.type === 'special project' || selectedPlot.status !== 'available') {
+
+  const hasUnavailableSelection = selectedPlotIdsForSubmission.some((plotId) => {
+    const selectedPlot = getSelectedPlot(plotId);
+    return !selectedPlot || selectedPlot.type === 'special project' || selectedPlot.status !== 'available';
+  });
+
+  if (hasUnavailableSelection) {
     alert('Please select an available plot.');
     return;
   }
@@ -101,25 +125,40 @@ const submit = async () => {
   try {
     // Save gardener registration
     const gardenersRef = dbRef(database, 'gardeners');
-    const gardenerId = await push(gardenersRef, {
+    const gardenerRef = await push(gardenersRef, {
       firstName: form.value.firstName,
       lastName: form.value.lastName,
       email: form.value.email,
-      affiliation: form.value.affiliation,
-      studentType: form.value.affiliation === 'Student' ? form.value.studentType : null,
-      plots: form.value.plots.filter(p => p.plotId).map(p => p.plotId),
+      affiliations: form.value.affiliations,
+      affiliation: form.value.affiliations[0] || null,
+      studentType: form.value.affiliations.includes('Student') ? form.value.studentType : null,
+      plotId: selectedPlotIdsForSubmission[0],
+      plots: selectedPlotIdsForSubmission,
       partners: form.value.partners.filter(p => p.name || p.email),
       agreeRules: form.value.agreeRules,
       agreeWaiver: form.value.agreeWaiver,
       paymentVerified: false,
       createdAt: new Date().toISOString()
     });
+    const gardenerId = gardenerRef.key;
+
+    if (gardenerId) {
+      await Promise.all(
+        selectedPlotIdsForSubmission.map((plotId) =>
+          update(dbRef(database, `plots/${plotId}`), {
+            status: 'reserved',
+            paymentVerified: false,
+            registeredGardenerId: gardenerId
+          })
+        )
+      );
+    }
 
     // Emit events to update canvas color for each plot
-    form.value.plots.forEach(plot => {
-      if (plot.plotId) {
+    selectedPlotIdsForSubmission.forEach((plotId) => {
+      if (plotId) {
         const event = new CustomEvent('plot-registered', { 
-          detail: { plotId: plot.plotId } 
+          detail: { plotId } 
         });
         window.dispatchEvent(event);
       }
@@ -131,7 +170,7 @@ const submit = async () => {
       firstName: '',
       lastName: '',
       email: '',
-      affiliation: '',
+      affiliations: [],
       studentType: '',
       plots: [{ plotId: '' }],
       agreeRules: false,
@@ -150,6 +189,8 @@ loadPlots();
 
 // Listen for plot-selected events from PlotMapCanvas
 onMounted(() => {
+  loadCmsSettings();
+
   window.addEventListener('plot-selected', (e) => {
     const plotId = e.detail?.plotId;
     if (plotId) {
@@ -187,8 +228,11 @@ onMounted(() => {
 <template>
   <v-container class="mt-8">
     <v-card class="pa-8">
-      <v-card-title class="text-h4 mb-8">Plot Registration</v-card-title>
-      <div class="text-subtitle-1 mb-6">Click on an available plot to register</div>
+      <PublicPageHeader
+        title="Plot Registration"
+        subtitle="Click on an available plot to register"
+      show-home-link
+    />
 
       <div class="payment-cta">
         <v-btn
@@ -211,22 +255,26 @@ onMounted(() => {
       </div>
 
       <div class="mb-6" ref="canvasRef">
-        <PlotMapCanvas />
+        <PlotMapCanvas
+          :selected-plot-ids="selectedPlotIds"
+          :registration-open="registrationOpen"
+        />
       </div>
 
-      <v-alert v-if="submitted" type="success" class="mb-6">
-        Thank you for registering! Don't forget to
-        <a :href="paymentUrl" target="_blank" rel="noopener noreferrer" class="payment-link">
-          pay for your plots
-        </a>
-        . For any questions, please email uaf-garden@alaska.edu
-      </v-alert>
+      <template v-if="settingsLoaded && registrationOpen">
+        <v-alert v-if="submitted" type="success" class="mb-6">
+          Thank you for registering! Don't forget to
+          <a :href="paymentUrl" target="_blank" rel="noopener noreferrer" class="payment-link">
+            pay for your plots
+          </a>
+          . For any questions, please email uaf-garden@alaska.edu
+        </v-alert>
 
-      <v-form @submit.prevent="submit" v-if="!submitted" ref="formRef">
+        <v-form @submit.prevent="submit" v-if="!submitted" ref="formRef">
         <!-- Personal Information -->
         <v-row>
           <v-col cols="12">
-            <h3 class="text-h6 mb-4">Personal Information</h3>
+            <h3 class="form-section-title">Gardener Information</h3>
           </v-col>
           <v-col cols="12" md="6">
             <v-text-field
@@ -252,30 +300,15 @@ onMounted(() => {
           </v-col>
         </v-row>
 
-        <!-- UAF Affiliation -->
-        <v-row class="mt-4">
-          <v-col cols="12" md="6">
-            <v-select
-              v-model="form.affiliation"
-              :items="affiliationOptions"
-              label="UAF Affiliation"
-              required
-            ></v-select>
-          </v-col>
-          <v-col v-if="form.affiliation === 'Student'" cols="12" md="6">
-            <v-select
-              v-model="form.studentType"
-              :items="studentTypeOptions"
-              label="Student Type"
-              required
-            ></v-select>
-          </v-col>
-        </v-row>
+        <UafAffiliationSelector
+          v-model="form.affiliations"
+          v-model:student-type="form.studentType"
+        />
 
         <!-- Plot Selection -->
         <v-row class="mt-6">
           <v-col cols="12">
-            <h3 class="text-h6 mb-4">Select plot(s) on map</h3>
+            <h3 class="form-section-title">Select plot(s) on map</h3>
           </v-col>
         </v-row>
 
@@ -328,7 +361,7 @@ onMounted(() => {
         <!-- Partners -->
         <v-row class="mt-6">
           <v-col cols="12">
-            <h3 class="text-h6 mb-4">Do you share your plot? Enter partner(s) below</h3>
+            <h3 class="form-subtitle">Do you share your plot? Enter partner(s) below</h3>
             <v-card v-for="(partner, index) in form.partners" :key="`partner-${index}`" class="mb-4 pa-4">
               <v-row>
                 <v-col cols="12" md="6">
@@ -361,19 +394,25 @@ onMounted(() => {
         </v-row>
 
         <!-- Agreements -->
-        <v-row class="mt-6">
+        <v-row class="mt-8">
           <v-col cols="12">
-            <h3 class="text-h6 mb-4">Agreements</h3>
-            <label class="agreement-checkbox">
-              <input v-model="form.agreeRules" type="checkbox" />
-              <span class="agreement-checkbox__box" aria-hidden="true"></span>
-              <span class="agreement-checkbox__label">I agree to the Garden Rules and Etiquette</span>
-            </label>
-            <label class="agreement-checkbox">
-              <input v-model="form.agreeWaiver" type="checkbox" />
-              <span class="agreement-checkbox__box" aria-hidden="true"></span>
-              <span class="agreement-checkbox__label">I agree to the Liability Waiver</span>
-            </label>
+            <h3 class="form-section-title">Please check all that apply</h3>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col cols="12">
+            <div class="form-soft-panel">
+              <label class="agreement-checkbox">
+                <input v-model="form.agreeRules" type="checkbox" />
+                <span class="agreement-checkbox__box" aria-hidden="true"></span>
+                <span class="agreement-checkbox__label">I agree to the Garden Rules and Etiquette</span>
+              </label>
+              <label class="agreement-checkbox">
+                <input v-model="form.agreeWaiver" type="checkbox" />
+                <span class="agreement-checkbox__box" aria-hidden="true"></span>
+                <span class="agreement-checkbox__label">I agree to the Liability Waiver</span>
+              </label>
+            </div>
           </v-col>
         </v-row>
 
@@ -391,7 +430,12 @@ onMounted(() => {
             </v-btn>
           </v-col>
         </v-row>
-      </v-form>
+        </v-form>
+      </template>
+
+      <v-alert v-else-if="settingsLoaded" type="warning" variant="tonal" class="mt-6">
+        Registration is currently closed. For more information email uaf-garden@alaska.edu
+      </v-alert>
     </v-card>
   </v-container>
 </template>
@@ -438,13 +482,38 @@ onMounted(() => {
   max-width: 180px;
 }
 
+.form-section-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #1b5e20;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid rgba(27, 94, 32, 0.18);
+}
+
+.form-subtitle {
+  font-size: 0.98rem;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.form-soft-panel {
+  border: 1px solid rgba(27, 94, 32, 0.14);
+  border-radius: 12px;
+  background: rgba(27, 94, 32, 0.04);
+  padding: 14px 14px 4px;
+}
+
 .agreement-checkbox {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
   cursor: pointer;
   user-select: none;
+  padding: 6px 2px;
 }
 
 .agreement-checkbox input {

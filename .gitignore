@@ -22,5 +22,14 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Security
 .env.local
+.env.production
+.env.staging
 .env
+.firebase/
+firebase/seed-registrations.json
+src/services/firebaseConfig.js
+firebase.json
+package-lock.json

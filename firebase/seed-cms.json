@@ -1,0 +1,25 @@
+{
+  "cms": {
+    "welcome": "The UAF Campus Community Garden (est. March 2012) is a student club organized:\n1. to provide an opportunity for UAF affiliates to cultivate a campus community with a shared vision;\n2. to enhance the sense of community by promoting interactions across disciplines and between students, faculty, and staff;\n3. to beautify the campus;\n4. to create a tranquil space on campus that encourages a work/life balance;\n5. to provide a place on campus for us to grow organic food and flowers;\n6. to provide a place to host campus workshops, classes, and tours;\n7. to provide a meeting place for UAF affiliates;\n8. to highlight UAF’s commitment to sustainability and the well-being of UAF affiliates.",
+    "pleaseNote": "We expect registration to open on or around May 5, 2026. Registration will proceed in tiers, starting with returning gardeners. Please wait for registration to open.",
+    "registrationOpen": false,
+    "bannerImageUrl": "",
+    "prices": "Students: $ 20 (first plot and additional plots)\nRegular pricing: $40 (first plot), $30 (each additional plot)",
+    "rules": [
+      {
+        "text": "Garden Rules and Etiquette",
+        "url": "https://drive.google.com/file/d/1pS5_H4qwViVgASTp3Eoal8nNCaEhXTaa/view?usp=sharing"
+      },
+      {
+        "text": "Liability Waiver",
+        "url": "https://drive.google.com/open?id=1cnuXRGk7ADS5zqp_GBUBJbKOj77PHAC2"
+      }
+    ],
+    "resources": [
+      {
+        "text": "UAF Office of Sustainability",
+        "url": "https://www.uaf.edu/sustainability/"
+      }
+    ]
+  }
+}

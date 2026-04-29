@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { computed, ref, onMounted, watch } from 'vue';
 import { database } from '@/services/firebaseConfig';
 import { ref as dbRef, get, onValue } from 'firebase/database';
 import {
@@ -11,11 +11,24 @@ import {
   mapHeight
 } from '@/utils/manualPlotLayout';
 
+const props = defineProps({
+  selectedPlotIds: {
+    type: Array,
+    default: () => []
+  },
+  registrationOpen: {
+    type: Boolean,
+    default: true
+  }
+});
+
 const canvasRef = ref(null);
 const plots = ref({});
 const landmarks = ref({});
+const gardenersByPlot = ref({});
 const hoveredPlot = ref(null);
 const tooltipPos = ref({ x: 0, y: 0 });
+const selectedColor = '#0d47a1';
 const statusColors = {
   available: '#4caf50',     // green
   reserved: '#ffc107',      // yellow (clicked but not paid)
@@ -29,12 +42,41 @@ const getDefaultPlots = () =>
       plotId,
       {
         ...plot,
+        id: plotId,
         status: plot.type === 'special project' ? 'unavailable' : 'available',
         registeredGardenerId: null,
         paymentVerified: false
       }
     ])
   );
+
+const buildGardenersByPlot = (gardeners = {}) => {
+  const byPlot = {};
+
+  Object.values(gardeners).forEach((gardener) => {
+    const firstName = gardener?.firstName?.trim();
+    if (!firstName) {
+      return;
+    }
+
+    const plotIds = [
+      gardener.plotId,
+      ...(Array.isArray(gardener.plots) ? gardener.plots : [])
+    ]
+      .filter(Boolean)
+      .map(normalizePlotId);
+
+    plotIds.forEach((plotId) => {
+      if (!byPlot[plotId]) {
+        byPlot[plotId] = firstName;
+      }
+    });
+  });
+
+  return byPlot;
+};
+
+const selectedPlotIdSet = computed(() => new Set((props.selectedPlotIds || []).map(normalizePlotId)));
 
 const getDefaultLandmarks = () =>
   Object.fromEntries(
@@ -51,20 +93,18 @@ const mergePlotsWithManualLayout = (firebasePlots = {}) => {
 
   Object.entries(firebasePlots).forEach(([plotId, plotData]) => {
     const normalizedPlotId = normalizePlotId(plotId);
-
-    if (!manualPlotsById[normalizedPlotId]) {
-      return;
-    }
+    const manualPlot = manualPlotsById[normalizedPlotId] || {};
+    const defaultStatus = manualPlot.type === 'special project' ? 'unavailable' : 'available';
 
     merged[normalizedPlotId] = {
-      ...merged[normalizedPlotId],
+      ...manualPlot,
       ...plotData,
-      x: manualPlotsById[normalizedPlotId].x,
-      y: manualPlotsById[normalizedPlotId].y,
-      width: manualPlotsById[normalizedPlotId].width,
-      height: manualPlotsById[normalizedPlotId].height,
-      name: manualPlotsById[normalizedPlotId].name,
-      type: manualPlotsById[normalizedPlotId].type || 'regular'
+      id: normalizedPlotId,
+      name: plotData?.name ?? manualPlot.name ?? String(Number((normalizedPlotId.match(/^plot-(\d+)$/i) || [])[1] || 0)),
+      type: plotData?.type ?? manualPlot.type ?? 'regular',
+      status: plotData?.status ?? defaultStatus,
+      registeredGardenerId: plotData?.registeredGardenerId ?? null,
+      paymentVerified: plotData?.paymentVerified === true
     };
   });
 
@@ -97,6 +137,16 @@ const loadPlots = async () => {
     landmarks.value = landmarksSnapshot.exists()
       ? mergeLandmarksWithManualLayout(landmarksSnapshot.val())
       : getDefaultLandmarks();
+    gardenersByPlot.value = {};
+
+    try {
+      const gardenersSnapshot = await get(dbRef(database, 'gardeners'));
+      gardenersByPlot.value = gardenersSnapshot.exists()
+        ? buildGardenersByPlot(gardenersSnapshot.val())
+        : {};
+    } catch {
+      gardenersByPlot.value = {};
+    }
 
     if (!plotsSnapshot.exists()) {
       throw new Error('No plot data in Firebase');
@@ -126,6 +176,17 @@ const setupRealtimeListener = () => {
       landmarks.value = mergeLandmarksWithManualLayout(snapshot.val());
     }
   });
+
+  const gardenersRef = dbRef(database, 'gardeners');
+  onValue(
+    gardenersRef,
+    (snapshot) => {
+      gardenersByPlot.value = snapshot.exists() ? buildGardenersByPlot(snapshot.val()) : {};
+    },
+    () => {
+      gardenersByPlot.value = {};
+    }
+  );
 
   // Listen for local plot registration events
   window.addEventListener('plot-registered', (e) => {
@@ -193,15 +254,15 @@ const drawMap = () => {
   });
 
   // Draw all plots
-  Object.values(plots.value).forEach(plot => {
-    if (!plot || !plot.x) return;
+  Object.entries(plots.value).forEach(([plotId, plot]) => {
+    if (!hasPlotGeometry(plot)) return;
 
     const x = plot.x * scale;
     const y = plot.y * scale;
     const w = plot.width * scale;
     const h = plot.height * scale;
 
-    const fillColor = getPlotFillColor(plot);
+    const fillColor = getPlotFillColor(plotId, plot);
 
     // Draw rectangle
     ctx.fillStyle = fillColor;
@@ -214,7 +275,7 @@ const drawMap = () => {
 
     // Draw plot label (if space allows)
     if (w > 30 && h > 20) {
-      const plotNum = String(Number(plot.id.split('-')[1]));
+      const plotNum = String(Number((plotId.split('-')[1] || '').trim()));
       ctx.fillStyle = '#000';
       ctx.font = `${Math.min(12, w / 3)}px Arial`;
       ctx.textAlign = 'center';
@@ -226,10 +287,20 @@ const drawMap = () => {
 };
 
 const isSpecialProject = (plot) => plot?.type === 'special project';
+const hasPlotGeometry = (plot) =>
+  plot
+  && Number.isFinite(Number(plot.x))
+  && Number.isFinite(Number(plot.y))
+  && Number.isFinite(Number(plot.width))
+  && Number.isFinite(Number(plot.height));
 
-const getPlotFillColor = (plot) => {
+const getPlotFillColor = (plotId, plot) => {
   if (!plot) {
     return statusColors.available;
+  }
+
+  if (props.registrationOpen && selectedPlotIdSet.value.has(plotId) && plot.status === 'available' && !isSpecialProject(plot)) {
+    return selectedColor;
   }
 
   if (isSpecialProject(plot) || plot.status === 'unavailable' || plot.status === 'verified') {
@@ -249,6 +320,10 @@ const getPlotFillColor = (plot) => {
 
 // Handle canvas click
 const handleCanvasClick = (event) => {
+  if (!props.registrationOpen) {
+    return;
+  }
+
   const canvas = canvasRef.value;
   const scale = canvas.width / mapWidth;
   const rect = canvas.getBoundingClientRect();
@@ -257,7 +332,7 @@ const handleCanvasClick = (event) => {
 
   // Find clicked plot
   for (const [plotId, plot] of Object.entries(plots.value)) {
-    if (!plot || !plot.x) continue;
+    if (!hasPlotGeometry(plot)) continue;
     if (isSpecialProject(plot) || plot.status !== 'available') continue;
     if (
       clickX >= plot.x &&
@@ -285,7 +360,7 @@ const handleCanvasMouseMove = (event) => {
 
   // Find hovered plot
   for (const [plotId, plot] of Object.entries(plots.value)) {
-    if (!plot || !plot.x) continue;
+    if (!hasPlotGeometry(plot)) continue;
     if (
       mouseX >= plot.x &&
       mouseX <= plot.x + plot.width &&
@@ -310,14 +385,29 @@ const getTooltipText = (plot) => {
   } else if (plot.status === 'available') {
     return 'Plot available';
   } else if (plot.status === 'reserved') {
-    return 'Plot unavailable (reserved)';
+    return 'Plot unavailable';
   } else {
     return 'Plot unavailable';
   }
 };
 
+const getTooltipGardener = (plot) => {
+  if (!plot?.plotId) {
+    return '';
+  }
+
+  if (plot.status === 'available' && !isSpecialProject(plot)) {
+    return '';
+  }
+
+  const gardenerFirstName = plot.gardenerFirstName || gardenersByPlot.value[normalizePlotId(plot.plotId)];
+  return gardenerFirstName ? `Gardener: ${gardenerFirstName}` : '';
+};
+
 // Watch for plot changes and redraw
 watch(plots, drawMap, { deep: true });
+watch(() => props.selectedPlotIds, drawMap, { deep: true });
+watch(() => props.registrationOpen, drawMap);
 
 onMounted(async () => {
   // Set canvas size
@@ -354,6 +444,10 @@ onMounted(async () => {
     >
       <strong>Plot {{ hoveredPlot.name }}</strong><br>
       {{ getTooltipText(hoveredPlot) }}
+      <template v-if="getTooltipGardener(hoveredPlot)">
+        <br>
+        {{ getTooltipGardener(hoveredPlot) }}
+      </template>
     </div>
     
     <div class="legend">
