@@ -1,24 +1,16 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { ref as dbRef, get, remove, update } from 'firebase/database';
 import { database } from '@/services/firebaseConfig';
+import { tablePageSizeOptions, useTablePagination } from '@/composables/useTablePagination';
+import { useTableSearchSort } from '@/composables/useTableSearchSort';
+import { useTableSelection } from '@/composables/useTableSelection';
 
 const returningGardeners = ref([]);
 const loading = ref(true);
 const actionLoading = ref(false);
-const selectedReturningIds = ref([]);
 const expandedReturningIds = ref([]);
-const returningSortKey = ref('lastName');
-const returningSortDirection = ref('asc');
-const searchQuery = ref('');
-const page = ref(1);
-const pageSize = ref(15);
-const pageSizeOptions = [
-  { title: '15', value: 15 },
-  { title: '30', value: 30 },
-  { title: '45', value: 45 },
-  { title: 'All', value: 'all' }
-];
+const pageSizeOptions = tablePageSizeOptions;
 
 const returningHeaders = [
   { title: 'First name', key: 'firstName' },
@@ -66,60 +58,42 @@ const loadData = async () => {
   }
 };
 
-const filteredReturningGardeners = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase();
-  if (!query) return returningGardeners.value;
-
-  return returningGardeners.value.filter((entry) =>
-    [
-      entry.firstName,
-      entry.lastName,
-      entry.email,
-      entry.plotSummary,
-      entry.status
-    ].some((value) => String(value ?? '').toLowerCase().includes(query))
-  );
+const {
+  sortKey: returningSortKey,
+  sortDirection: returningSortDirection,
+  searchQuery,
+  sortedItems: sortedReturningGardeners,
+  toggleSort: toggleReturningSort,
+  sortIcon
+} = useTableSearchSort(returningGardeners, {
+  defaultSortKey: 'lastName',
+  searchValues: (entry) => [
+    entry.firstName,
+    entry.lastName,
+    entry.email,
+    entry.plotSummary,
+    entry.status
+  ]
 });
+const {
+  page,
+  pageSize,
+  totalItems,
+  totalPages,
+  paginatedItems: paginatedReturningGardeners,
+  resetPage
+} = useTablePagination(sortedReturningGardeners);
 
-const sortedReturningGardeners = computed(() => {
-  const items = [...filteredReturningGardeners.value];
-  const key = returningSortKey.value;
-  const direction = returningSortDirection.value === 'asc' ? 1 : -1;
-
-  items.sort((a, b) => {
-    const aValue = String(a[key] ?? '').toLowerCase();
-    const bValue = String(b[key] ?? '').toLowerCase();
-    return aValue.localeCompare(bValue) * direction;
-  });
-
-  return items;
-});
-
-const totalItems = computed(() => sortedReturningGardeners.value.length);
-const totalPages = computed(() => {
-  if (pageSize.value === 'all') return 1;
-  return Math.max(1, Math.ceil(totalItems.value / Number(pageSize.value)));
-});
-
-const paginatedReturningGardeners = computed(() => {
-  if (pageSize.value === 'all') return sortedReturningGardeners.value;
-  const start = (page.value - 1) * Number(pageSize.value);
-  return sortedReturningGardeners.value.slice(start, start + Number(pageSize.value));
-});
-
-const selectedReturningGardeners = computed(() =>
-  sortedReturningGardeners.value.filter((entry) => selectedReturningIds.value.includes(entry.id))
-);
-
-const allReturningSelected = computed(
-  () => paginatedReturningGardeners.value.length > 0
-    && paginatedReturningGardeners.value.every((entry) => selectedReturningIds.value.includes(entry.id))
-);
-
-const someReturningSelected = computed(
-  () => paginatedReturningGardeners.value.some((entry) => selectedReturningIds.value.includes(entry.id))
-    && !allReturningSelected.value
-);
+const {
+  selectedIds: selectedReturningIds,
+  selectedItems: selectedReturningGardeners,
+  allSelected: allReturningSelected,
+  someSelected: someReturningSelected,
+  isSelected,
+  toggleSelected,
+  toggleSelectAll,
+  clearSelection
+} = useTableSelection(sortedReturningGardeners, paginatedReturningGardeners, (entry) => entry.id);
 
 const formatBoolean = (value) => (value ? 'Yes' : 'No');
 
@@ -155,32 +129,7 @@ const detailRows = (entry) => [
   { label: 'Updated at', value: entry.updatedAt }
 ];
 
-const isSelected = (id) => selectedReturningIds.value.includes(id);
-
 const isExpanded = (id) => expandedReturningIds.value.includes(id);
-
-const toggleSelected = (id) => {
-  if (selectedReturningIds.value.includes(id)) {
-    selectedReturningIds.value = selectedReturningIds.value.filter((selectedId) => selectedId !== id);
-    return;
-  }
-
-  selectedReturningIds.value = [...selectedReturningIds.value, id];
-};
-
-const toggleSelectAll = () => {
-  if (allReturningSelected.value) {
-    const pageIds = new Set(paginatedReturningGardeners.value.map((entry) => entry.id));
-    selectedReturningIds.value = selectedReturningIds.value.filter((id) => !pageIds.has(id));
-    return;
-  }
-
-  const merged = new Set([
-    ...selectedReturningIds.value,
-    ...paginatedReturningGardeners.value.map((entry) => entry.id)
-  ]);
-  selectedReturningIds.value = [...merged];
-};
 
 const toggleExpanded = (id) => {
   if (expandedReturningIds.value.includes(id)) {
@@ -189,24 +138,6 @@ const toggleExpanded = (id) => {
   }
 
   expandedReturningIds.value = [id];
-};
-
-const toggleReturningSort = (key) => {
-  if (returningSortKey.value === key) {
-    returningSortDirection.value = returningSortDirection.value === 'asc' ? 'desc' : 'asc';
-    return;
-  }
-
-  returningSortKey.value = key;
-  returningSortDirection.value = 'asc';
-};
-
-const sortIcon = (key) => {
-  if (returningSortKey.value !== key) {
-    return 'mdi-swap-vertical';
-  }
-
-  return returningSortDirection.value === 'asc' ? 'mdi-arrow-up' : 'mdi-arrow-down';
 };
 
 const updateReturningStatus = async (status) => {
@@ -225,7 +156,7 @@ const updateReturningStatus = async (status) => {
       )
     );
 
-    selectedReturningIds.value = [];
+    clearSelection();
     expandedReturningIds.value = [];
     await loadData();
   } catch (error) {
@@ -255,7 +186,7 @@ const deleteSelected = async () => {
       selectedReturningIds.value.map((id) => remove(dbRef(database, `returning-gardeners/${id}`)))
     );
 
-    selectedReturningIds.value = [];
+    clearSelection();
     expandedReturningIds.value = [];
     await loadData();
   } catch (error) {
@@ -273,47 +204,16 @@ const escapeCsvValue = (value) =>
     .replaceAll('\r', ' ')}"`;
 
 const exportReturningGardenersCsv = () => {
-  const rows = returningGardeners.value.map((entry) => ({
-    id: entry.id,
-    status: entry.status || 'incomplete',
-    firstName: entry.firstName,
-    lastName: entry.lastName,
-    email: entry.email,
-    affiliation: entry.affiliation,
-    studentType: entry.studentType,
-    hadPlotLastYear: formatBoolean(entry.hadPlotLastYear),
-    plotNumbers: entry.forgotPlotNumber ? 'forgot' : entry.plotNumbers || '',
-    forgotPlotNumber: formatBoolean(entry.forgotPlotNumber),
-    lastYearName: entry.lastYearName,
-    lastYearEmail: entry.lastYearEmail,
-    sharingPlot: formatBoolean(entry.sharingPlot),
-    partnerName: entry.partnerName,
-    partnerEmail: entry.partnerEmail,
-    agreeRules: formatBoolean(entry.agreeRules),
-    agreeLiability: formatBoolean(entry.agreeLiability),
-    updatedAt: entry.updatedAt
-  }));
-
-  const columns = [
-    'id',
-    'status',
-    'firstName',
-    'lastName',
-    'email',
-    'affiliation',
-    'studentType',
-    'hadPlotLastYear',
-    'plotNumbers',
-    'forgotPlotNumber',
-    'lastYearName',
-    'lastYearEmail',
-    'sharingPlot',
-    'partnerName',
-    'partnerEmail',
-    'agreeRules',
-    'agreeLiability',
-    'updatedAt'
-  ];
+  const columns = [...new Set(returningGardeners.value.flatMap((entry) => Object.keys(entry || {})))];
+  const rows = returningGardeners.value.map((entry) => {
+    const normalized = {};
+    columns.forEach((column) => {
+      const value = entry[column];
+      normalized[column] =
+        Array.isArray(value) || (value && typeof value === 'object') ? JSON.stringify(value) : value;
+    });
+    return normalized;
+  });
 
   const csv = [
     columns.join(','),
@@ -334,13 +234,9 @@ const exportReturningGardenersCsv = () => {
 onMounted(loadData);
 
 watch([returningSortKey, returningSortDirection, searchQuery], () => {
-  page.value = 1;
-  selectedReturningIds.value = [];
+  resetPage();
+  clearSelection();
   expandedReturningIds.value = [];
-});
-
-watch(pageSize, () => {
-  page.value = 1;
 });
 
 </script>

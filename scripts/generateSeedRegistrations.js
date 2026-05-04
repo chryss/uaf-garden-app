@@ -169,14 +169,15 @@ const parsePartners = (value) => {
 
 const formatPlotId = (value) => `plot-${String(value).trim().padStart(3, '0')}`;
 
-const makeGardenerId = (index, plotId, email) => {
-  const safeEmail = String(email || '')
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
+
+const makeGardenerIdFromEmail = (email) => {
+  const safeEmail = normalizeEmail(email)
     .trim()
-    .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
-  return `gardener-${String(index + 1).padStart(3, '0')}-${plotId}${safeEmail ? `-${safeEmail}` : ''}`;
+  return `gardener-${safeEmail || 'unknown'}`;
 };
 
 if (!fs.existsSync(CSV_PATH)) {
@@ -187,7 +188,7 @@ const rows = csvToObjects(fs.readFileSync(CSV_PATH, 'utf8'));
 const gardeners = {};
 const plotUpdates = {};
 
-rows.forEach((row, index) => {
+rows.forEach((row) => {
   if (!row.number) {
     return;
   }
@@ -195,27 +196,42 @@ rows.forEach((row, index) => {
   const plotId = formatPlotId(row.number);
   const firstName = row.firstname || '';
   const lastName = row.lastname || '';
-  const email = row.email || '';
+  const email = normalizeEmail(row.email || '');
   const affiliation = normalizeAffiliation(row);
   const studentType = affiliation === 'Student' ? normalizeStudentType(row) : null;
   const partners = parsePartners(row.partners);
   const createdAt = row.timestamp ? new Date(Number(row.timestamp)).toISOString() : new Date().toISOString();
   const paymentVerified = parseBool(row.validated) && !parseBool(row.needs_payment);
-  const gardenerId = makeGardenerId(index, plotId, email);
+  const gardenerId = makeGardenerIdFromEmail(email);
+  const existing = gardeners[gardenerId];
+  const mergedPlots = [
+    ...(Array.isArray(existing?.plots) ? existing.plots : []),
+    plotId
+  ].filter((value, idx, arr) => value && arr.indexOf(value) === idx);
+  const mergedPartners = [
+    ...(Array.isArray(existing?.partners) ? existing.partners : []),
+    ...partners
+  ];
+  const hasVerifiedPlot = Boolean(existing?.paymentVerified) || paymentVerified;
 
   gardeners[gardenerId] = {
-    firstName,
-    lastName,
+    ...(existing || {}),
+    firstName: existing?.firstName || firstName,
+    lastName: existing?.lastName || lastName,
     email,
-    affiliation,
-    studentType,
-    plotId,
-    plots: [plotId],
-    partners,
+    affiliation: existing?.affiliation || affiliation,
+    affiliations:
+      (Array.isArray(existing?.affiliations) && existing.affiliations.length)
+        ? existing.affiliations
+        : [existing?.affiliation || affiliation].filter(Boolean),
+    studentType: existing?.studentType || studentType,
+    plotId: mergedPlots[0] || plotId,
+    plots: mergedPlots,
+    partners: mergedPartners.filter((partner) => partner?.name || partner?.email),
     agreeRules: true,
     agreeWaiver: true,
-    paymentVerified,
-    createdAt,
+    paymentVerified: hasVerifiedPlot,
+    createdAt: existing?.createdAt || createdAt,
     source: 'legacy-csv'
   };
 

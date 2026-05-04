@@ -1,5 +1,29 @@
-# Vue 3 + Vite
+# UAF Community Garden App
 
-This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+Vue 3 + Vuetify + Firebase app for public plot registration and admin management.
 
-Learn more about IDE Support for Vue in the [Vue Docs Scaling up Guide](https://vuejs.org/guide/scaling-up/tooling.html#ide-support).
+## Quick start
+
+```bash
+npm install
+npm run dev
+```
+
+Production build preview:
+
+```bash
+npm run build
+npm run preview
+```
+
+## Routes
+
+- Public: `/`, `/plot-registration`, `/returning-gardener`
+- Admin: `/admin/login`, `/admin`
+
+## Documentation
+
+- [Developer Guide](./docs/developer-guide.md)
+- [Site Administrator Guide](./docs/site-admin-guide.md)
+- [Docs Index](./docs/README.md)
+- [Realtime Database Schema Notes](./firebase/db-schema.md)

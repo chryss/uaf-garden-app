@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, onMounted, watch } from 'vue';
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue';
 import { database } from '@/services/firebaseConfig';
 import { ref as dbRef, get, onValue } from 'firebase/database';
 import {
@@ -28,6 +28,7 @@ const landmarks = ref({});
 const gardenersByPlot = ref({});
 const hoveredPlot = ref(null);
 const tooltipPos = ref({ x: 0, y: 0 });
+const realtimeUnsubscribers = [];
 const selectedColor = '#0d47a1';
 const statusColors = {
   available: '#4caf50',     // green
@@ -152,33 +153,33 @@ const loadPlots = async () => {
       throw new Error('No plot data in Firebase');
     }
 
-    console.log('Loaded plots from Firebase:', Object.keys(plots.value).length);
   } catch (error) {
-    console.log('Firebase read failed, using manual layout:', error.message);
     plots.value = getDefaultPlots();
     landmarks.value = getDefaultLandmarks();
-    console.log('Loaded plots from manual layout:', Object.keys(plots.value).length);
+    console.warn('Using manual plot layout fallback:', error.message);
   }
 };
 
 // Listen for real-time updates
 const setupRealtimeListener = () => {
   const plotsRef = dbRef(database, 'plots');
-  onValue(plotsRef, (snapshot) => {
+  const offPlots = onValue(plotsRef, (snapshot) => {
     if (snapshot.exists()) {
       plots.value = mergePlotsWithManualLayout(snapshot.val());
     }
   });
+  realtimeUnsubscribers.push(offPlots);
 
   const landmarksRef = dbRef(database, 'landmarks');
-  onValue(landmarksRef, (snapshot) => {
+  const offLandmarks = onValue(landmarksRef, (snapshot) => {
     if (snapshot.exists()) {
       landmarks.value = mergeLandmarksWithManualLayout(snapshot.val());
     }
   });
+  realtimeUnsubscribers.push(offLandmarks);
 
   const gardenersRef = dbRef(database, 'gardeners');
-  onValue(
+  const offGardeners = onValue(
     gardenersRef,
     (snapshot) => {
       gardenersByPlot.value = snapshot.exists() ? buildGardenersByPlot(snapshot.val()) : {};
@@ -187,30 +188,38 @@ const setupRealtimeListener = () => {
       gardenersByPlot.value = {};
     }
   );
+  realtimeUnsubscribers.push(offGardeners);
 
   // Listen for local plot registration events
-  window.addEventListener('plot-registered', (e) => {
-    const plotId = e.detail?.plotId;
-    if (plotId && plots.value[plotId]) {
-      plots.value[plotId].status = 'reserved';
-      console.log('Plot marked as reserved locally:', plotId);
+  window.addEventListener('plot-registered', handlePlotRegistered);
+};
+
+const handlePlotRegistered = (e) => {
+  const plotId = e.detail?.plotId;
+  if (plotId && plots.value[plotId]) {
+    plots.value[plotId].status = 'reserved';
+  }
+};
+
+const cleanupRealtimeListener = () => {
+  realtimeUnsubscribers.splice(0).forEach((unsubscribe) => {
+    if (typeof unsubscribe === 'function') {
+      unsubscribe();
     }
   });
+  window.removeEventListener('plot-registered', handlePlotRegistered);
 };
 
 // Draw the canvas map
 const drawMap = () => {
   const canvas = canvasRef.value;
   if (!canvas) {
-    console.log('No canvas ref');
     return;
   }
 
   const ctx = canvas.getContext('2d');
   const scale = canvas.width / mapWidth;
-  
-  console.log('Drawing map with', Object.keys(plots.value).length, 'plots, scale:', scale);
-  
+
   // Clear canvas
   ctx.fillStyle = '#f5f5f5';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -283,7 +292,6 @@ const drawMap = () => {
       ctx.fillText(plotNum, x + w / 2, y + h / 2);
     }
   });
-
 };
 
 const isSpecialProject = (plot) => plot?.type === 'special project';
@@ -423,6 +431,10 @@ onMounted(async () => {
   // But we need to ensure it's called at least once
   drawMap();
   setupRealtimeListener();
+});
+
+onUnmounted(() => {
+  cleanupRealtimeListener();
 });
 </script>
 

@@ -1,10 +1,10 @@
 <script setup>
-import { computed, ref, onMounted } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import PlotMapCanvas from '@/components/PlotMapCanvas.vue';
 import PublicPageHeader from '@/components/PublicPageHeader.vue';
 import UafAffiliationSelector from '@/components/UafAffiliationSelector.vue';
 import { database } from '@/services/firebaseConfig';
-import { ref as dbRef, push, get, update } from 'firebase/database';
+import { ref as dbRef, get, set, update } from 'firebase/database';
 
 const form = ref({
   firstName: '',
@@ -33,6 +33,15 @@ const selectedPlotIds = computed(() =>
     .map((plot) => plot.plotId)
     .filter(Boolean)
 );
+
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
+
+const makeGardenerIdFromEmail = (email) => {
+  const safeEmail = normalizeEmail(email)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `gardener-${safeEmail || 'unknown'}`;
+};
 
 // Load available plots
 const loadPlots = async () => {
@@ -123,36 +132,46 @@ const submit = async () => {
 
   loading.value = true;
   try {
-    // Save gardener registration
-    const gardenersRef = dbRef(database, 'gardeners');
-    const gardenerRef = await push(gardenersRef, {
+    const normalizedEmail = normalizeEmail(form.value.email);
+    const gardenerId = makeGardenerIdFromEmail(normalizedEmail);
+    const gardenerRef = dbRef(database, `gardeners/${gardenerId}`);
+    const existingGardenerSnapshot = await get(gardenerRef);
+    const existingGardener = existingGardenerSnapshot.exists() ? existingGardenerSnapshot.val() : null;
+    const existingPlotIds = [
+      existingGardener?.plotId,
+      ...(Array.isArray(existingGardener?.plots) ? existingGardener.plots : [])
+    ]
+      .filter(Boolean)
+      .map((plotId) => String(plotId).trim());
+
+    const mergedPlotIds = [...new Set([...existingPlotIds, ...selectedPlotIdsForSubmission])];
+
+    await set(gardenerRef, {
+      ...(existingGardener || {}),
       firstName: form.value.firstName,
       lastName: form.value.lastName,
-      email: form.value.email,
+      email: normalizedEmail,
       affiliations: form.value.affiliations,
       affiliation: form.value.affiliations[0] || null,
       studentType: form.value.affiliations.includes('Student') ? form.value.studentType : null,
-      plotId: selectedPlotIdsForSubmission[0],
-      plots: selectedPlotIdsForSubmission,
+      plotId: mergedPlotIds[0] || selectedPlotIdsForSubmission[0],
+      plots: mergedPlotIds,
       partners: form.value.partners.filter(p => p.name || p.email),
       agreeRules: form.value.agreeRules,
       agreeWaiver: form.value.agreeWaiver,
       paymentVerified: false,
-      createdAt: new Date().toISOString()
+      createdAt: existingGardener?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     });
-    const gardenerId = gardenerRef.key;
-
-    if (gardenerId) {
-      await Promise.all(
-        selectedPlotIdsForSubmission.map((plotId) =>
-          update(dbRef(database, `plots/${plotId}`), {
-            status: 'reserved',
-            paymentVerified: false,
-            registeredGardenerId: gardenerId
-          })
-        )
-      );
-    }
+    await Promise.all(
+      selectedPlotIdsForSubmission.map((plotId) =>
+        update(dbRef(database, `plots/${plotId}`), {
+          status: 'reserved',
+          paymentVerified: false,
+          registeredGardenerId: gardenerId
+        })
+      )
+    );
 
     // Emit events to update canvas color for each plot
     selectedPlotIdsForSubmission.forEach((plotId) => {
@@ -185,43 +204,44 @@ const submit = async () => {
   }
 };
 
-loadPlots();
+const handlePlotSelected = (e) => {
+  const plotId = e.detail?.plotId;
+  if (plotId) {
+    const selectedPlot = getSelectedPlot(plotId);
+    if (!selectedPlot || selectedPlot.type === 'special project' || selectedPlot.status !== 'available') {
+      return;
+    }
+
+    // Find first empty plot slot and prefill it
+    const emptyIndex = form.value.plots.findIndex(p => !p.plotId);
+    if (emptyIndex !== -1) {
+      form.value.plots[emptyIndex].plotId = plotId;
+
+      setTimeout(() => {
+        if (plotRefs.value[emptyIndex]) {
+          plotRefs.value[emptyIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    }
+  }
+};
+
+const handlePlotRegistered = () => {
+  // Reserved for future toast/status messaging integration.
+};
 
 // Listen for plot-selected events from PlotMapCanvas
-onMounted(() => {
+onMounted(async () => {
+  await loadPlots();
   loadCmsSettings();
 
-  window.addEventListener('plot-selected', (e) => {
-    const plotId = e.detail?.plotId;
-    if (plotId) {
-      const selectedPlot = getSelectedPlot(plotId);
-      if (!selectedPlot || selectedPlot.type === 'special project' || selectedPlot.status !== 'available') {
-        return;
-      }
+  window.addEventListener('plot-selected', handlePlotSelected);
+  window.addEventListener('plot-registered', handlePlotRegistered);
+});
 
-      // Find first empty plot slot and prefill it
-      const emptyIndex = form.value.plots.findIndex(p => !p.plotId);
-      if (emptyIndex !== -1) {
-        // Prefill the first empty slot
-        form.value.plots[emptyIndex].plotId = plotId;
-        
-        // Scroll to that plot field
-        setTimeout(() => {
-          if (plotRefs.value[emptyIndex]) {
-            plotRefs.value[emptyIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
-        }, 100);
-      }
-    }
-  });
-
-  // Listen for plot-registered to update canvas color (locally, not in DB)
-  window.addEventListener('plot-registered', (e) => {
-    const plotId = e.detail?.plotId;
-    if (plotId) {
-      console.log('Plot registered:', plotId);
-    }
-  });
+onUnmounted(() => {
+  window.removeEventListener('plot-selected', handlePlotSelected);
+  window.removeEventListener('plot-registered', handlePlotRegistered);
 });
 </script>
 

@@ -33,3 +33,4 @@ firebase/seed-registrations.json
 src/services/firebaseConfig.js
 firebase.json
 package-lock.json
+.local/

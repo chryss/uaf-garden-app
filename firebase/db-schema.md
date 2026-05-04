@@ -33,11 +33,12 @@ plots (map of plotId -> metadata)
 
 gardeners (registrations)
 {
-  "gardener-abc123": {
+  "gardener-jane-example-edu": {
     "firstName": "Jane",
     "lastName": "Doe",
     "email": "jane@example.edu",
     "plotId": "plot-1",
+    "plots": ["plot-1", "plot-8"],
     "partners": [ { "name": "Pat", "email": "pat@example.com" } ],
     "paymentVerified": false,
     "createdAt": "2026-04-19T21:00:00Z"
@@ -70,4 +71,5 @@ admins
 Notes
 - Use the svgId on each plot to wire the interactive SVG map to plot metadata.
 - Keep cms and plots readable by public; restrict writes to admins where appropriate.
+- Gardener IDs are normalized from email (`gardener-<email-slug>`) so repeat registrations for the same email are merged into one gardener record with multiple `plots`.
 - Gardeners & returning-gardeners can be written by anonymous users (public write), but admin-only reads are enforced for managing registrations.

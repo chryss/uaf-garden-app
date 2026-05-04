@@ -1,27 +1,23 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { ref as dbRef, get, remove, update } from 'firebase/database';
 import { database } from '@/services/firebaseConfig';
+import UafAffiliationSelector from '@/components/UafAffiliationSelector.vue';
+import { tablePageSizeOptions, useTablePagination } from '@/composables/useTablePagination';
+import { useTableSearchSort } from '@/composables/useTableSearchSort';
+import { useTableSelection } from '@/composables/useTableSelection';
 
 const loading = ref(true);
 const actionLoading = ref(false);
 const registrationRows = ref([]);
 const gardenersById = ref({});
 
-const selectedRowIds = ref([]);
 const expandedRowIds = ref([]);
-
-const sortKey = ref('plotNumber');
-const sortDirection = ref('asc');
-const searchQuery = ref('');
-const page = ref(1);
-const pageSize = ref(15);
-const pageSizeOptions = [
-  { title: '15', value: 15 },
-  { title: '30', value: 30 },
-  { title: '45', value: 45 },
-  { title: 'All', value: 'all' }
-];
+const pageSizeOptions = tablePageSizeOptions;
+const editDialogOpen = ref(false);
+const savingEdit = ref(false);
+const editErrorMessage = ref('');
+const editingReservation = ref(null);
 
 const headers = [
   { title: 'Plot ID', key: 'plotNumber' },
@@ -48,6 +44,14 @@ const normalizePlotId = (plotId) => {
   const match = /^plot-(\d+)$/i.exec(String(plotId).trim());
   if (!match) return String(plotId).trim();
   return `plot-${String(Number(match[1])).padStart(3, '0')}`;
+};
+
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
+const makeGardenerIdFromEmail = (email) => {
+  const safeEmail = normalizeEmail(email)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `gardener-${safeEmail || 'unknown'}`;
 };
 
 const getPlotNumber = (plotId) => {
@@ -78,6 +82,13 @@ const formatAffiliation = (gardener) => {
     return gardener.affiliations.join(', ');
   }
   return gardener?.affiliation || '—';
+};
+
+const getAffiliations = (gardener) => {
+  if (Array.isArray(gardener?.affiliations) && gardener.affiliations.length) {
+    return gardener.affiliations.filter(Boolean);
+  }
+  return gardener?.affiliation ? [gardener.affiliation] : [];
 };
 
 const loadData = async () => {
@@ -118,6 +129,8 @@ const loadData = async () => {
           firstName: gardener.firstName || '',
           lastName: gardener.lastName || '',
           email: gardener.email || '',
+          affiliations: getAffiliations(gardener),
+          studentType: gardener.studentType || '',
           affiliationLabel: formatAffiliation(gardener),
           partnersSummary: formatPartners(gardener.partners),
           paymentVerified: paid === true,
@@ -136,89 +149,54 @@ const loadData = async () => {
   }
 };
 
-const filteredRows = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase();
-  if (!query) return registrationRows.value;
-
-  return registrationRows.value.filter((row) =>
-    [
-      row.plotLabel,
-      row.firstName,
-      row.lastName,
-      row.email,
-      row.affiliationLabel,
-      row.partnersSummary,
-      row.paymentLabel
-    ].some((value) => String(value ?? '').toLowerCase().includes(query))
-  );
-});
-
-const sortedRows = computed(() => {
-  const rows = [...filteredRows.value];
-  const key = sortKey.value;
-  const direction = sortDirection.value === 'asc' ? 1 : -1;
-
-  rows.sort((a, b) => {
+const {
+  sortKey,
+  sortDirection,
+  searchQuery,
+  sortedItems: sortedRows,
+  toggleSort,
+  sortIcon
+} = useTableSearchSort(registrationRows, {
+  defaultSortKey: 'plotNumber',
+  searchValues: (row) => [
+    row.plotLabel,
+    row.firstName,
+    row.lastName,
+    row.email,
+    row.affiliationLabel,
+    row.partnersSummary,
+    row.paymentLabel
+  ],
+  compare: (a, b, key, direction) => {
     if (key === 'plotNumber') {
       return (a.plotNumber - b.plotNumber) * direction;
     }
-
     if (key === 'paymentLabel') {
       return (Number(a.paymentVerified) - Number(b.paymentVerified)) * direction;
     }
-
     const aValue = String(a[key] ?? '').toLowerCase();
     const bValue = String(b[key] ?? '').toLowerCase();
     return aValue.localeCompare(bValue) * direction;
-  });
-
-  return rows;
-});
-
-const totalItems = computed(() => sortedRows.value.length);
-const totalPages = computed(() => {
-  if (pageSize.value === 'all') return 1;
-  return Math.max(1, Math.ceil(totalItems.value / Number(pageSize.value)));
-});
-
-const paginatedRows = computed(() => {
-  if (pageSize.value === 'all') return sortedRows.value;
-  const start = (page.value - 1) * Number(pageSize.value);
-  return sortedRows.value.slice(start, start + Number(pageSize.value));
-});
-
-const selectedRows = computed(() =>
-  sortedRows.value.filter((row) => selectedRowIds.value.includes(row.id))
-);
-
-const allSelected = computed(
-  () => paginatedRows.value.length > 0
-    && paginatedRows.value.every((row) => selectedRowIds.value.includes(row.id))
-);
-
-const someSelected = computed(
-  () => paginatedRows.value.some((row) => selectedRowIds.value.includes(row.id)) && !allSelected.value
-);
-
-const isSelected = (id) => selectedRowIds.value.includes(id);
-
-const toggleSelected = (id) => {
-  if (isSelected(id)) {
-    selectedRowIds.value = selectedRowIds.value.filter((value) => value !== id);
-    return;
   }
-  selectedRowIds.value = [...selectedRowIds.value, id];
-};
-
-const toggleSelectAll = () => {
-  if (allSelected.value) {
-    const pageRowIds = new Set(paginatedRows.value.map((row) => row.id));
-    selectedRowIds.value = selectedRowIds.value.filter((id) => !pageRowIds.has(id));
-    return;
-  }
-  const merged = new Set([...selectedRowIds.value, ...paginatedRows.value.map((row) => row.id)]);
-  selectedRowIds.value = [...merged];
-};
+});
+const {
+  page,
+  pageSize,
+  totalItems,
+  totalPages,
+  paginatedItems: paginatedRows,
+  resetPage
+} = useTablePagination(sortedRows);
+const {
+  selectedIds: selectedRowIds,
+  selectedItems: selectedRows,
+  allSelected,
+  someSelected,
+  isSelected,
+  toggleSelected,
+  toggleSelectAll,
+  clearSelection
+} = useTableSelection(sortedRows, paginatedRows, (row) => row.id);
 
 const isExpanded = (id) => expandedRowIds.value.includes(id);
 
@@ -228,22 +206,6 @@ const toggleExpanded = (id) => {
     return;
   }
   expandedRowIds.value = [id];
-};
-
-const toggleSort = (key) => {
-  if (sortKey.value === key) {
-    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
-    return;
-  }
-  sortKey.value = key;
-  sortDirection.value = 'asc';
-};
-
-const sortIcon = (key) => {
-  if (sortKey.value !== key) {
-    return 'mdi-swap-vertical';
-  }
-  return sortDirection.value === 'asc' ? 'mdi-arrow-up' : 'mdi-arrow-down';
 };
 
 const formatFieldValue = (value) => {
@@ -263,6 +225,210 @@ const detailRows = (row) => {
     value
   }));
   return [...gardenerFields, ...plotFields];
+};
+
+const openEditDialog = (row) => {
+  editErrorMessage.value = '';
+  editingReservation.value = {
+    rowId: row.id,
+    gardenerId: row.gardenerId,
+    plotId: row.plotId,
+    firstName: row.firstName || '',
+    lastName: row.lastName || '',
+    email: row.email || '',
+    affiliations: [...(row.affiliations || [])],
+    studentType: row.studentType || '',
+    paymentVerified: row.paymentVerified === true,
+    editPartners: false,
+    partners: normalizePartners(row.gardenerRaw?.partners)
+  };
+  editDialogOpen.value = true;
+};
+
+const getGardenerIdsByEmail = (email) => {
+  const normalized = normalizeEmail(email);
+  return Object.entries(gardenersById.value)
+    .filter(([, gardener]) => normalizeEmail(gardener?.email) === normalized)
+    .map(([gardenerId]) => gardenerId);
+};
+
+const getGardenerPlotIds = (gardener) =>
+  [
+    gardener?.plotId,
+    ...(Array.isArray(gardener?.plots) ? gardener.plots : [])
+  ]
+    .filter(Boolean)
+    .map(normalizePlotId)
+    .filter((value, index, arr) => arr.indexOf(value) === index);
+
+const normalizePartners = (partners) =>
+  (Array.isArray(partners) ? partners : [])
+    .map((partner) => ({
+      name: String(partner?.name || '').trim(),
+      email: String(partner?.email || '').trim()
+    }))
+    .filter((partner) => partner.name || partner.email);
+
+const addEditPartner = () => {
+  if (!editingReservation.value) return;
+  editingReservation.value.partners.push({ name: '', email: '' });
+};
+
+const removeEditPartner = (index) => {
+  if (!editingReservation.value) return;
+  editingReservation.value.partners.splice(index, 1);
+};
+
+const saveReservationEdit = async () => {
+  if (!editingReservation.value) {
+    return;
+  }
+
+  editErrorMessage.value = '';
+  const payload = editingReservation.value;
+  const firstName = String(payload.firstName || '').trim();
+  const lastName = String(payload.lastName || '').trim();
+  const email = normalizeEmail(payload.email);
+  const affiliations = Array.isArray(payload.affiliations)
+    ? payload.affiliations.filter(Boolean)
+    : [];
+  const studentType = affiliations.includes('Student') ? String(payload.studentType || '') : '';
+  const partners = normalizePartners(payload.partners);
+
+  if (!firstName || !lastName || !email) {
+    editErrorMessage.value = 'First name, last name, and email are required.';
+    return;
+  }
+
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailPattern.test(email)) {
+    editErrorMessage.value = 'Enter a valid email address.';
+    return;
+  }
+
+  if (!affiliations.length) {
+    editErrorMessage.value = 'Select at least one affiliation.';
+    return;
+  }
+
+  if (affiliations.includes('Student') && !studentType) {
+    editErrorMessage.value = 'Select a student type when Student affiliation is selected.';
+    return;
+  }
+
+  const sourceRow = registrationRows.value.find((row) => row.id === payload.rowId);
+  if (!sourceRow) {
+    editErrorMessage.value = 'Unable to locate this reservation.';
+    return;
+  }
+
+  const oldEmail = normalizeEmail(sourceRow.email);
+  const firstChanged = firstName !== (sourceRow.firstName || '');
+  const lastChanged = lastName !== (sourceRow.lastName || '');
+  const emailChanged = email !== oldEmail;
+
+  const relatedGardenerIds = getGardenerIdsByEmail(oldEmail);
+  let gardenerIdsToUpdate = [payload.gardenerId];
+
+  if (emailChanged && relatedGardenerIds.length > 1) {
+    const applyToAll = window.confirm(
+      'Other registrations use this same email. Apply the email change to those registrations too?'
+    );
+    if (applyToAll) {
+      gardenerIdsToUpdate = relatedGardenerIds;
+    }
+  } else if ((firstChanged || lastChanged) && relatedGardenerIds.length > 1) {
+    const applyNamesToAll = window.confirm(
+      'Warning: this email has multiple registrations. Apply this name change to all registrations with the same email?'
+    );
+    if (applyNamesToAll) {
+      gardenerIdsToUpdate = relatedGardenerIds;
+    }
+  }
+
+  const updatedAt = new Date().toISOString();
+  const gardenerPatch = {
+    firstName,
+    lastName,
+    email,
+    affiliations,
+    affiliation: affiliations[0] || null,
+    studentType: affiliations.includes('Student') ? studentType : null,
+    ...(payload.editPartners ? { partners } : {}),
+    updatedAt
+  };
+
+  savingEdit.value = true;
+  try {
+    if (emailChanged) {
+      const targetGardenerId = makeGardenerIdFromEmail(email);
+      const targetExisting = gardenersById.value[targetGardenerId] || null;
+      const sourceGardeners = gardenerIdsToUpdate
+        .map((gardenerId) => gardenersById.value[gardenerId])
+        .filter(Boolean);
+      const sourcePlotIds = sourceGardeners.flatMap((gardener) => getGardenerPlotIds(gardener));
+      const targetPlotIds = getGardenerPlotIds(targetExisting);
+      const mergedPlotIds = [...new Set([...targetPlotIds, ...sourcePlotIds])];
+      const mergedPartners = [
+        ...(Array.isArray(targetExisting?.partners) ? targetExisting.partners : []),
+        ...sourceGardeners.flatMap((gardener) => (Array.isArray(gardener?.partners) ? gardener.partners : []))
+      ];
+
+      await update(dbRef(database, `gardeners/${targetGardenerId}`), {
+        ...(targetExisting || {}),
+        ...gardenerPatch,
+        plotId: mergedPlotIds[0] || payload.plotId,
+        plots: mergedPlotIds.length ? mergedPlotIds : [payload.plotId],
+        partners: payload.editPartners ? partners : mergedPartners,
+        paymentVerified: payload.paymentVerified === true,
+        agreeRules: targetExisting?.agreeRules === true || sourceGardeners.some((gardener) => gardener?.agreeRules === true),
+        agreeWaiver: targetExisting?.agreeWaiver === true || sourceGardeners.some((gardener) => gardener?.agreeWaiver === true),
+        createdAt: targetExisting?.createdAt || sourceGardeners[0]?.createdAt || updatedAt,
+        updatedAt
+      });
+
+      const oldIdsToRemove = gardenerIdsToUpdate.filter((gardenerId) => gardenerId !== targetGardenerId);
+      await Promise.all(oldIdsToRemove.map((gardenerId) => remove(dbRef(database, `gardeners/${gardenerId}`))));
+
+      await Promise.all(
+        (mergedPlotIds.length ? mergedPlotIds : [payload.plotId]).map((plotId) =>
+          update(dbRef(database, `plots/${plotId}`), {
+            registeredGardenerId: targetGardenerId
+          })
+        )
+      );
+
+      await update(dbRef(database, `plots/${payload.plotId}`), {
+        paymentVerified: payload.paymentVerified === true,
+        status: payload.paymentVerified ? 'verified' : 'reserved',
+        registeredGardenerId: targetGardenerId
+      });
+    } else {
+      await Promise.all([
+        ...gardenerIdsToUpdate.map((gardenerId) =>
+          update(dbRef(database, `gardeners/${gardenerId}`), gardenerPatch)
+        ),
+        update(dbRef(database, `plots/${payload.plotId}`), {
+          paymentVerified: payload.paymentVerified === true,
+          status: payload.paymentVerified ? 'verified' : 'reserved',
+          registeredGardenerId: payload.gardenerId
+        }),
+        update(dbRef(database, `gardeners/${payload.gardenerId}`), {
+          paymentVerified: payload.paymentVerified === true,
+          updatedAt
+        })
+      ]);
+    }
+
+    editDialogOpen.value = false;
+    editingReservation.value = null;
+    await loadData();
+  } catch (error) {
+    console.error('Error saving reservation:', error);
+    editErrorMessage.value = 'Unable to save reservation changes.';
+  } finally {
+    savingEdit.value = false;
+  }
 };
 
 const updateSelectionVerification = async ({ gardenerPaid, plotStatus, plotPaid }) => {
@@ -293,7 +459,7 @@ const updateSelectionVerification = async ({ gardenerPaid, plotStatus, plotPaid 
       )
     ]);
 
-    selectedRowIds.value = [];
+    clearSelection();
     expandedRowIds.value = [];
     await loadData();
   } catch (error) {
@@ -377,7 +543,7 @@ const deleteSelected = async () => {
 
     await Promise.all([...gardenerUpdates, ...plotUpdates]);
 
-    selectedRowIds.value = [];
+    clearSelection();
     expandedRowIds.value = [];
     await loadData();
   } catch (error) {
@@ -389,29 +555,39 @@ const deleteSelected = async () => {
 };
 
 const exportCsv = () => {
+  const gardenerFields = [...new Set(sortedRows.value.flatMap((row) => Object.keys(row.gardenerRaw || {})))];
+  const plotFields = [...new Set(sortedRows.value.flatMap((row) => Object.keys(row.plotRaw || {})))];
   const columns = [
+    'rowId',
+    'gardenerId',
     'plotId',
     'plotNumber',
-    'gardenerId',
-    'firstName',
-    'lastName',
-    'email',
-    'affiliation',
-    'partners',
-    'paid'
+    ...gardenerFields.map((field) => `gardener.${field}`),
+    ...plotFields.map((field) => `plot.${field}`)
   ];
 
-  const rows = sortedRows.value.map((row) => ({
-    plotId: row.plotId,
-    plotNumber: row.plotLabel,
-    gardenerId: row.gardenerId,
-    firstName: row.firstName,
-    lastName: row.lastName,
-    email: row.email,
-    affiliation: row.affiliationLabel,
-    partners: row.partnersSummary,
-    paid: row.paymentVerified ? 'Yes' : 'No'
-  }));
+  const rows = sortedRows.value.map((row) => {
+    const result = {
+      rowId: row.id,
+      gardenerId: row.gardenerId,
+      plotId: row.plotId,
+      plotNumber: row.plotLabel
+    };
+
+    gardenerFields.forEach((field) => {
+      const value = row.gardenerRaw?.[field];
+      result[`gardener.${field}`] =
+        Array.isArray(value) || (value && typeof value === 'object') ? JSON.stringify(value) : value;
+    });
+
+    plotFields.forEach((field) => {
+      const value = row.plotRaw?.[field];
+      result[`plot.${field}`] =
+        Array.isArray(value) || (value && typeof value === 'object') ? JSON.stringify(value) : value;
+    });
+
+    return result;
+  });
 
   const escapeValue = (value) =>
     `"${String(value ?? '').replaceAll('"', '""').replaceAll('\n', ' ').replaceAll('\r', ' ')}"`;
@@ -432,13 +608,9 @@ const exportCsv = () => {
 };
 
 watch([sortKey, sortDirection, searchQuery], () => {
-  selectedRowIds.value = [];
+  clearSelection();
   expandedRowIds.value = [];
-  page.value = 1;
-});
-
-watch(pageSize, () => {
-  page.value = 1;
+  resetPage();
 });
 
 onMounted(loadData);
@@ -495,6 +667,7 @@ onMounted(loadData);
                 <v-icon size="14">{{ sortIcon(header.key) }}</v-icon>
               </span>
             </th>
+            <th class="returning-table__actions">Actions</th>
           </tr>
         </thead>
 
@@ -543,10 +716,21 @@ onMounted(loadData);
                   {{ row.paymentVerified ? 'Yes' : 'No' }}
                 </v-chip>
               </td>
+              <td class="returning-table__actions" @click.stop>
+                <v-btn
+                  size="small"
+                  variant="flat"
+                  rounded="lg"
+                  class="edit-btn"
+                  @click="openEditDialog(row)"
+                >
+                  Edit
+                </v-btn>
+              </td>
             </tr>
 
             <tr v-if="isExpanded(row.id)" class="returning-table__detail-row">
-              <td :colspan="9" class="pa-0">
+              <td :colspan="10" class="pa-0">
                 <div class="returning-detail">
                   <dl class="returning-detail__list">
                     <template v-for="field in detailRows(row)" :key="field.label">
@@ -559,7 +743,7 @@ onMounted(loadData);
             </tr>
           </template>
           <tr v-if="!loading && paginatedRows.length === 0">
-            <td :colspan="9" class="returning-table__empty">No matching rows.</td>
+            <td :colspan="10" class="returning-table__empty">No matching rows.</td>
           </tr>
         </tbody>
       </v-table>
@@ -623,6 +807,98 @@ onMounted(loadData);
       />
     </div>
   </v-card>
+
+  <v-dialog v-model="editDialogOpen" max-width="680">
+    <v-card>
+      <v-card-title>Edit reservation</v-card-title>
+      <v-card-text v-if="editingReservation" class="pt-2">
+        <v-alert v-if="editErrorMessage" type="error" variant="tonal" class="mb-3">
+          {{ editErrorMessage }}
+        </v-alert>
+        <v-row>
+          <v-col cols="12" md="6">
+            <v-text-field v-model="editingReservation.firstName" label="First name" />
+          </v-col>
+          <v-col cols="12" md="6">
+            <v-text-field v-model="editingReservation.lastName" label="Last name" />
+          </v-col>
+          <v-col cols="12">
+            <v-text-field v-model="editingReservation.email" label="Email" type="email" />
+          </v-col>
+        </v-row>
+        <UafAffiliationSelector
+          v-model="editingReservation.affiliations"
+          v-model:student-type="editingReservation.studentType"
+        />
+        <v-row>
+          <v-col cols="12" md="6">
+            <v-switch
+              v-model="editingReservation.paymentVerified"
+              color="success"
+              inset
+              label="Verified payment"
+            />
+          </v-col>
+          <v-col cols="12" md="6">
+            <div class="readonly-label">Plot</div>
+            <div class="readonly-value">{{ editingReservation.plotId }}</div>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col cols="12">
+            <v-switch
+              v-model="editingReservation.editPartners"
+              color="primary"
+              inset
+              label="Edit partners"
+            />
+          </v-col>
+        </v-row>
+        <div v-if="editingReservation.editPartners" class="partners-editor">
+          <div
+            v-for="(partner, index) in editingReservation.partners"
+            :key="`partner-${index}`"
+            class="partners-editor__row"
+          >
+            <v-text-field
+              v-model="partner.name"
+              label="Partner name"
+              density="compact"
+              class="partners-editor__field"
+            />
+            <v-text-field
+              v-model="partner.email"
+              label="Partner email"
+              type="email"
+              density="compact"
+              class="partners-editor__field"
+            />
+            <v-btn
+              icon="mdi-close"
+              variant="text"
+              size="small"
+              color="error"
+              @click="removeEditPartner(index)"
+            />
+          </div>
+          <v-btn
+            size="small"
+            color="primary"
+            variant="outlined"
+            prepend-icon="mdi-plus"
+            @click="addEditPartner"
+          >
+            Add partner
+          </v-btn>
+        </div>
+      </v-card-text>
+      <v-card-actions class="px-6 pb-4">
+        <v-spacer />
+        <v-btn variant="text" @click="editDialogOpen = false">Cancel</v-btn>
+        <v-btn color="primary" :loading="savingEdit" @click="saveReservationEdit">Save</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <style scoped>
@@ -725,6 +1001,24 @@ onMounted(loadData);
   color: rgba(0, 0, 0, 0.54);
 }
 
+.returning-table__actions {
+  width: 102px;
+  min-width: 102px;
+  text-align: right;
+  padding-right: 8px;
+}
+
+.edit-btn {
+  text-transform: none;
+  min-width: 72px;
+  background-color: #5f7ea6 !important;
+  color: #fff !important;
+}
+
+.edit-btn:hover {
+  background-color: #547095 !important;
+}
+
 .returning-table__empty {
   text-align: center;
   color: rgba(0, 0, 0, 0.56);
@@ -764,6 +1058,40 @@ onMounted(loadData);
 
 .pagination-size {
   max-width: 120px;
+}
+
+.readonly-label {
+  font-size: 0.8rem;
+  color: rgba(0, 0, 0, 0.62);
+  margin-bottom: 4px;
+}
+
+.readonly-value {
+  min-height: 40px;
+  border: 1px solid rgba(0, 0, 0, 0.23);
+  border-radius: 4px;
+  background: #fff;
+  padding: 9px 12px;
+  font-size: 0.95rem;
+  color: rgba(0, 0, 0, 0.87);
+}
+
+.partners-editor {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 8px;
+}
+
+.partners-editor__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.partners-editor__field {
+  margin-bottom: 2px;
 }
 
 @media (max-width: 960px) {

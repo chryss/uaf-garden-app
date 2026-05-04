@@ -17,18 +17,33 @@ const emit = defineEmits(['update:modelValue', 'update:studentType']);
 const affiliationOptions = ['Student', 'Faculty', 'Staff', 'Emeriti', 'None'];
 const studentTypeOptions = ['Graduate', 'Undergraduate'];
 
-const selectedAffiliations = computed(() => props.modelValue || []);
+const normalizeAffiliations = (values) => {
+  const selected = Array.isArray(values) ? values : [];
+  if (selected.includes('None')) {
+    return ['None'];
+  }
+  return affiliationOptions.filter((option) => option !== 'None' && selected.includes(option));
+};
+
+const selectedAffiliations = computed(() => normalizeAffiliations(props.modelValue));
 const hasStudentAffiliation = computed(() => selectedAffiliations.value.includes('Student'));
+const noneSelected = computed(() => selectedAffiliations.value.includes('None'));
 
 const updateAffiliation = (option, checked) => {
-  const next = new Set(selectedAffiliations.value);
+  if (option === 'None' && checked) {
+    emit('update:modelValue', ['None']);
+    emit('update:studentType', '');
+    return;
+  }
+
+  const next = new Set(selectedAffiliations.value.filter((value) => value !== 'None'));
   if (checked) {
     next.add(option);
   } else {
     next.delete(option);
   }
 
-  const normalized = affiliationOptions.filter((item) => next.has(item));
+  const normalized = affiliationOptions.filter((item) => item !== 'None' && next.has(item));
   emit('update:modelValue', normalized);
 
   if (!normalized.includes('Student')) {
@@ -47,11 +62,13 @@ const updateAffiliation = (option, checked) => {
           v-for="option in affiliationOptions"
           :key="option"
           class="affiliation-option agreement-checkbox"
+          :class="{ 'affiliation-option--disabled': noneSelected && option !== 'None' }"
         >
           <input
             :id="`affiliation-${option}`"
             :checked="selectedAffiliations.includes(option)"
             type="checkbox"
+            :disabled="noneSelected && option !== 'None'"
             @change="(event) => updateAffiliation(option, event.target.checked)"
           />
           <span class="agreement-checkbox__box" aria-hidden="true"></span>
@@ -92,6 +109,11 @@ const updateAffiliation = (option, checked) => {
 
 .affiliation-option {
   flex: 0 0 auto;
+}
+
+.affiliation-option--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .student-type {

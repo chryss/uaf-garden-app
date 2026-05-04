@@ -14,11 +14,54 @@
     },
     "gardeners": {
       ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
-      ".write": true
+      "$gardenerId": {
+        ".write": "(auth != null && root.child('admins').child(auth.uid).exists()) || auth == null",
+        ".validate": "(auth != null && root.child('admins').child(auth.uid).exists()) || (newData.hasChildren(['firstName', 'lastName', 'email', 'affiliations', 'plotId', 'plots', 'agreeRules', 'agreeWaiver', 'paymentVerified', 'createdAt']) && newData.child('firstName').isString() && newData.child('firstName').val().length <= 80 && newData.child('lastName').isString() && newData.child('lastName').val().length <= 80 && (newData.child('firstName').val().length > 0 || newData.child('lastName').val().length > 0) && newData.child('email').isString() && newData.child('email').val().length <= 254 && newData.child('email').val().matches(/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/) && newData.child('affiliations').hasChildren(['0']) && !newData.child('affiliations').child('6').exists() && newData.child('plotId').isString() && newData.child('plotId').val().matches(/^plot-[0-9]{3}$/) && newData.child('plots').hasChildren(['0']) && !newData.child('plots').child('4').exists() && newData.child('agreeRules').val() === true && newData.child('agreeWaiver').val() === true && newData.child('paymentVerified').isBoolean() && newData.child('createdAt').isString())",
+        "affiliations": {
+          "$index": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40"
+          }
+        },
+        "plots": {
+          "$index": {
+            ".validate": "newData.isString() && newData.val().matches(/^plot-[0-9]{3}$/)"
+          }
+        },
+        "partners": {
+          "$index": {
+            "name": {
+              ".validate": "newData.val() === null || (newData.isString() && newData.val().length <= 120)"
+            },
+            "email": {
+              ".validate": "newData.val() === null || (newData.isString() && newData.val().length <= 254 && newData.val().matches(/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/))"
+            },
+            "$other": {
+              ".validate": "auth != null && root.child('admins').child(auth.uid).exists()"
+            }
+          }
+        },
+        "$other": {
+          ".validate": "auth != null && root.child('admins').child(auth.uid).exists()"
+        }
+      }
     },
     "returning-gardeners": {
       ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
-      ".write": true
+      "$submissionId": {
+        ".write": "(auth != null && root.child('admins').child(auth.uid).exists()) || auth == null",
+        ".validate": "(auth != null && root.child('admins').child(auth.uid).exists()) || (newData.hasChildren(['status', 'firstName', 'lastName', 'email', 'affiliations', 'agreeRules', 'agreeLiability', 'updatedAt']) && newData.child('status').val() === 'incomplete' && newData.child('firstName').isString() && newData.child('firstName').val().length <= 80 && newData.child('lastName').isString() && newData.child('lastName').val().length <= 80 && (newData.child('firstName').val().length > 0 || newData.child('lastName').val().length > 0) && newData.child('email').isString() && newData.child('email').val().length <= 254 && newData.child('email').val().matches(/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/) && newData.child('affiliations').hasChildren(['0']) && !newData.child('affiliations').child('6').exists() && newData.child('agreeRules').val() === true && newData.child('agreeLiability').val() === true && newData.child('updatedAt').isString())",
+        "status": {
+          ".validate": "(auth != null && root.child('admins').child(auth.uid).exists() && newData.isString() && (newData.val() === 'incomplete' || newData.val() === 'complete')) || (auth == null && newData.val() === 'incomplete')"
+        },
+        "affiliations": {
+          "$index": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40"
+          }
+        },
+        "$other": {
+          ".validate": "auth != null && root.child('admins').child(auth.uid).exists() || newData.parent().child('status').val() === 'incomplete'"
+        }
+      }
     },
     "admins": {
       ".read": "auth != null && root.child('admins').child(auth.uid).exists()",

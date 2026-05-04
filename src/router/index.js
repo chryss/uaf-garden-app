@@ -58,31 +58,60 @@ const router = createRouter({
   routes
 });
 
+let pendingAuthUserPromise = null;
+
+const getCurrentUser = () => {
+  if (auth.currentUser) {
+    return Promise.resolve(auth.currentUser);
+  }
+
+  if (!pendingAuthUserPromise) {
+    pendingAuthUserPromise = new Promise((resolve) => {
+      const unsubscribe = auth.onAuthStateChanged((user) => {
+        unsubscribe();
+        pendingAuthUserPromise = null;
+        resolve(user || null);
+      });
+    });
+  }
+
+  return pendingAuthUserPromise;
+};
+
+const isAdminUser = async (user) => {
+  if (!user?.uid) {
+    return false;
+  }
+
+  const snapshot = await get(dbRef(database, `admins/${user.uid}`));
+  return snapshot.exists();
+};
+
 // Navigation guard for protected routes
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to) => {
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
 
-  if (requiresAuth) {
-    auth.onAuthStateChanged(user => {
-      if (user) {
-        get(dbRef(database, `admins/${user.uid}`))
-          .then((snapshot) => {
-            if (snapshot.exists()) {
-              next();
-            } else {
-              signOut(auth).finally(() => next('/admin/login?not-admin=1'));
-            }
-          })
-          .catch((error) => {
-            console.error('Admin check failed:', error);
-            next('/admin/login');
-          });
-      } else {
-        next('/admin/login');
-      }
-    });
-  } else {
-    next();
+  if (!requiresAuth) {
+    return true;
+  }
+
+  try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return '/admin/login';
+    }
+
+    const adminUser = await isAdminUser(user);
+    if (!adminUser) {
+      await signOut(auth);
+      return '/admin/login?not-admin=1';
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Admin check failed:', error);
+    return '/admin/login';
   }
 });
 

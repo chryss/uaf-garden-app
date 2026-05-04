@@ -1,30 +1,23 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { database } from '@/services/firebaseConfig';
 import { ref as dbRef, get, remove, set, update } from 'firebase/database';
 import { mapHeight, mapWidth } from '@/utils/manualPlotLayout';
+import { tablePageSizeOptions, useTablePagination } from '@/composables/useTablePagination';
+import { useTableSearchSort } from '@/composables/useTableSearchSort';
+import { useTableSelection } from '@/composables/useTableSelection';
 
 const loading = ref(true);
 const actionLoading = ref(false);
 const rows = ref([]);
-const selectedIds = ref([]);
-const sortKey = ref('id');
-const sortDirection = ref('asc');
-const searchQuery = ref('');
-const page = ref(1);
-const pageSize = ref(15);
-const pageSizeOptions = [
-  { title: '15', value: 15 },
-  { title: '30', value: 30 },
-  { title: '45', value: 45 },
-  { title: 'All', value: 'all' }
-];
+const pageSizeOptions = tablePageSizeOptions;
 const errorMessage = ref('');
 const successMessage = ref('');
 
 const editDialogOpen = ref(false);
 const savingEdit = ref(false);
 const editingItem = ref(null);
+const editErrorMessage = ref('');
 
 const createDialogOpen = ref(false);
 const creatingItem = ref(false);
@@ -39,6 +32,7 @@ const createForm = ref({
   height: ''
 });
 const plotTypeOptions = ['regular', 'needs work', 'special project'];
+const landmarkTypeOptions = ['feature', 'building'];
 
 const headers = [
   { key: 'id', label: 'ID' },
@@ -147,23 +141,23 @@ const loadData = async () => {
   }
 };
 
-const sortedRows = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase();
-  const sourceRows = query
-    ? rows.value.filter((row) =>
-      [
-        row.id,
-        row.name,
-        row.type,
-        row.itemKind === 'plot' ? row.status : ''
-      ].some((value) => String(value ?? '').toLowerCase().includes(query))
-    )
-    : rows.value;
-  const direction = sortDirection.value === 'asc' ? 1 : -1;
-  const result = [...sourceRows];
-
-  result.sort((a, b) => {
-    if (sortKey.value === 'id') {
+const {
+  sortKey,
+  sortDirection,
+  searchQuery,
+  sortedItems: sortedRows,
+  toggleSort,
+  sortIcon
+} = useTableSearchSort(rows, {
+  defaultSortKey: 'id',
+  searchValues: (row) => [
+    row.id,
+    row.name,
+    row.type,
+    row.itemKind === 'plot' ? row.status : ''
+  ],
+  compare: (a, b, key, direction) => {
+    if (key === 'id') {
       const aPlot = isPlotRow(a);
       const bPlot = isPlotRow(b);
       if (aPlot && bPlot) {
@@ -175,75 +169,33 @@ const sortedRows = computed(() => {
       const bId = String(b.id || '').toLowerCase();
       return aId.localeCompare(bId) * direction;
     }
-
-    const aValue = String(a[sortKey.value] ?? '').toLowerCase();
-    const bValue = String(b[sortKey.value] ?? '').toLowerCase();
+    const aValue = String(a[key] ?? '').toLowerCase();
+    const bValue = String(b[key] ?? '').toLowerCase();
     return aValue.localeCompare(bValue) * direction;
-  });
-
-  return result;
-});
-
-const totalItems = computed(() => sortedRows.value.length);
-const totalPages = computed(() => {
-  if (pageSize.value === 'all') return 1;
-  return Math.max(1, Math.ceil(totalItems.value / Number(pageSize.value)));
-});
-
-const paginatedRows = computed(() => {
-  if (pageSize.value === 'all') return sortedRows.value;
-  const start = (page.value - 1) * Number(pageSize.value);
-  return sortedRows.value.slice(start, start + Number(pageSize.value));
-});
-
-const selectedRows = computed(() =>
-  sortedRows.value.filter((row) => selectedIds.value.includes(row.id))
-);
-
-const allSelected = computed(() =>
-  paginatedRows.value.length > 0 && paginatedRows.value.every((row) => selectedIds.value.includes(row.id))
-);
-
-const someSelected = computed(() =>
-  paginatedRows.value.some((row) => selectedIds.value.includes(row.id)) && !allSelected.value
-);
-
-const isSelected = (id) => selectedIds.value.includes(id);
-
-const toggleSelected = (id) => {
-  if (isSelected(id)) {
-    selectedIds.value = selectedIds.value.filter((selectedId) => selectedId !== id);
-    return;
   }
-  selectedIds.value = [...selectedIds.value, id];
-};
+});
+const {
+  page,
+  pageSize,
+  totalItems,
+  totalPages,
+  paginatedItems: paginatedRows,
+  resetPage
+} = useTablePagination(sortedRows);
 
-const toggleSelectAll = () => {
-  if (allSelected.value) {
-    const pageIds = new Set(paginatedRows.value.map((row) => row.id));
-    selectedIds.value = selectedIds.value.filter((id) => !pageIds.has(id));
-    return;
-  }
-  const merged = new Set([...selectedIds.value, ...paginatedRows.value.map((row) => row.id)]);
-  selectedIds.value = [...merged];
-};
-
-const toggleSort = (key) => {
-  if (sortKey.value === key) {
-    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
-    return;
-  }
-  sortKey.value = key;
-  sortDirection.value = 'asc';
-};
-
-const sortIcon = (key) => {
-  if (sortKey.value !== key) return 'mdi-swap-vertical';
-  return sortDirection.value === 'asc' ? 'mdi-arrow-up' : 'mdi-arrow-down';
-};
+const {
+  selectedIds,
+  selectedItems: selectedRows,
+  allSelected,
+  someSelected,
+  isSelected,
+  toggleSelected,
+  toggleSelectAll,
+  clearSelection
+} = useTableSelection(sortedRows, paginatedRows, (row) => row.id);
 
 const openEditDialog = (row) => {
-  errorMessage.value = '';
+  editErrorMessage.value = '';
   successMessage.value = '';
   editingItem.value = {
     ...row,
@@ -258,21 +210,30 @@ const openEditDialog = (row) => {
 const saveEdit = async () => {
   if (!editingItem.value) return;
 
-  errorMessage.value = '';
+  editErrorMessage.value = '';
   successMessage.value = '';
   const geometry = validateGeometry(editingItem.value);
   if (geometry.error) {
-    errorMessage.value = geometry.error;
+    editErrorMessage.value = geometry.error;
     return;
   }
 
   savingEdit.value = true;
   try {
     if (editingItem.value.itemKind === 'plot') {
+      const plotName = String(editingItem.value.name || '').trim();
+      const plotNumber = Number(plotName);
+      if (!Number.isInteger(plotNumber) || plotNumber <= 0) {
+        editErrorMessage.value = 'Plot name must be a positive integer.';
+        savingEdit.value = false;
+        return;
+      }
+
       const plotType = plotTypeOptions.includes(editingItem.value.type)
         ? editingItem.value.type
         : 'regular';
       await update(dbRef(database, `plots/${editingItem.value.id}`), {
+        name: String(plotNumber),
         type: plotType,
         x: geometry.values.x,
         y: geometry.values.y,
@@ -282,14 +243,14 @@ const saveEdit = async () => {
     } else {
       const landmarkName = String(editingItem.value.name || '').trim();
       if (!landmarkName || landmarkName.length > 50) {
-        errorMessage.value = 'Landmark name must be between 1 and 50 characters.';
+        editErrorMessage.value = 'Landmark name must be between 1 and 50 characters.';
         savingEdit.value = false;
         return;
       }
 
       await update(dbRef(database, `landmarks/${editingItem.value.id}`), {
         name: landmarkName,
-        type: editingItem.value.type || 'feature',
+        type: landmarkTypeOptions.includes(editingItem.value.type) ? editingItem.value.type : 'feature',
         x: geometry.values.x,
         y: geometry.values.y,
         width: geometry.values.width,
@@ -303,7 +264,7 @@ const saveEdit = async () => {
     await loadData();
   } catch (error) {
     console.error('Error saving item:', error);
-    errorMessage.value = 'Unable to save this item.';
+    editErrorMessage.value = 'Unable to save this item.';
   } finally {
     savingEdit.value = false;
   }
@@ -467,12 +428,8 @@ const createItem = async () => {
 onMounted(loadData);
 
 watch([sortKey, sortDirection, searchQuery], () => {
-  page.value = 1;
-  selectedIds.value = [];
-});
-
-watch(pageSize, () => {
-  page.value = 1;
+  resetPage();
+  clearSelection();
 });
 </script>
 
@@ -564,9 +521,8 @@ watch(pageSize, () => {
             <td class="returning-table__actions">
               <v-btn
                 size="small"
-                color="success"
                 variant="flat"
-                rounded="pill"
+                rounded="lg"
                 class="edit-btn"
                 @click="openEditDialog(row)"
               >
@@ -622,24 +578,31 @@ watch(pageSize, () => {
     <v-card>
       <v-card-title>Edit {{ editingItem?.itemKind === 'plot' ? 'plot' : 'landmark' }}</v-card-title>
       <v-card-text v-if="editingItem" class="pt-2">
+        <v-alert v-if="editErrorMessage" type="error" variant="tonal" class="mb-3">
+          {{ editErrorMessage }}
+        </v-alert>
         <v-row>
           <v-col cols="12" md="6">
-            <v-text-field label="ID" :model-value="editingItem.id" readonly />
+            <div class="readonly-label">ID</div>
+            <div class="readonly-value">{{ editingItem.id }}</div>
           </v-col>
           <v-col cols="12" md="6">
             <v-text-field
-              v-if="editingItem.itemKind === 'landmark'"
+              v-if="editingItem.itemKind === 'plot'"
+              v-model="editingItem.name"
+              label="Name"
+            />
+            <v-text-field
+              v-else
               v-model="editingItem.name"
               label="Name"
               maxlength="50"
               counter
             />
-            <v-text-field
-              v-else
-              :model-value="editingItem.name"
-              label="Name"
-              readonly
-            />
+          </v-col>
+          <v-col cols="12" md="6" v-if="editingItem.itemKind === 'plot'">
+            <div class="readonly-label">Status</div>
+            <div class="readonly-value">{{ editingItem.status }}</div>
           </v-col>
           <v-col cols="12" md="6">
             <v-select
@@ -648,10 +611,12 @@ watch(pageSize, () => {
               :items="plotTypeOptions"
               label="Type"
             />
-            <v-text-field v-else v-model="editingItem.type" label="Type" />
-          </v-col>
-          <v-col cols="12" md="6" v-if="editingItem.itemKind === 'plot'">
-            <v-text-field :model-value="editingItem.status" label="Status" readonly />
+            <v-select
+              v-else
+              v-model="editingItem.type"
+              :items="landmarkTypeOptions"
+              label="Type"
+            />
           </v-col>
           <v-col cols="12" md="6">
             <v-text-field
@@ -691,7 +656,7 @@ watch(pageSize, () => {
           </v-col>
         </v-row>
         <div v-if="editingItem.itemKind === 'plot'" class="text-caption text-medium-emphasis mt-2">
-          Plot status, payment verification, and gardener linkage are intentionally read-only here.
+          Please edit plot status, assignment and payment verification in the Plot reservations dashboard.
         </div>
       </v-card-text>
       <v-card-actions class="px-6 pb-4">
@@ -868,6 +833,28 @@ watch(pageSize, () => {
 .edit-btn {
   text-transform: none;
   min-width: 72px;
+  background-color: #5f7ea6 !important;
+  color: #fff !important;
+}
+
+.edit-btn:hover {
+  background-color: #547095 !important;
+}
+
+.readonly-label {
+  font-size: 0.8rem;
+  color: rgba(0, 0, 0, 0.62);
+  margin-bottom: 4px;
+}
+
+.readonly-value {
+  min-height: 40px;
+  border: 1px solid rgba(0, 0, 0, 0.23);
+  border-radius: 4px;
+  background: #fff;
+  padding: 9px 12px;
+  font-size: 0.95rem;
+  color: rgba(0, 0, 0, 0.87);
 }
 
 .pagination-size {
