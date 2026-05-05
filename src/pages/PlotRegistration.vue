@@ -27,6 +27,7 @@ const submitted = ref(false);
 const maxPlots = ref(2);  // Default, can be set from CMS
 const registrationOpen = ref(false);
 const settingsLoaded = ref(false);
+const rulesLinks = ref([]);
 const paymentUrl = 'https://epay.alaska.edu/C21563_ustores/web/store_cat.jsp?STOREID=88&CATID=278';
 const selectedPlotIds = computed(() =>
   form.value.plots
@@ -42,6 +43,15 @@ const makeGardenerIdFromEmail = (email) => {
     .replace(/^-+|-+$/g, '');
   return `gardener-${safeEmail || 'unknown'}`;
 };
+
+const findCmsRuleLink = (matcher) => {
+  const entry = rulesLinks.value.find((rule) => matcher.test(String(rule?.text || '')));
+  const url = String(entry?.url || '').trim();
+  return url || '';
+};
+
+const rulesEtiquetteUrl = computed(() => findCmsRuleLink(/rules?|etiquette/i));
+const liabilityWaiverUrl = computed(() => findCmsRuleLink(/waiver|liability/i));
 
 // Load available plots
 const loadPlots = async () => {
@@ -60,7 +70,9 @@ const loadCmsSettings = async () => {
     const cmsRef = dbRef(database, 'cms');
     const snapshot = await get(cmsRef);
     if (snapshot.exists()) {
-      registrationOpen.value = snapshot.val().registrationOpen === true;
+      const cms = snapshot.val();
+      registrationOpen.value = cms.registrationOpen === true;
+      rulesLinks.value = Array.isArray(cms.rules) ? cms.rules : [];
     }
   } finally {
     settingsLoaded.value = true;
@@ -425,12 +437,38 @@ onUnmounted(() => {
               <label class="agreement-checkbox">
                 <input v-model="form.agreeRules" type="checkbox" />
                 <span class="agreement-checkbox__box" aria-hidden="true"></span>
-                <span class="agreement-checkbox__label">I agree to the Garden Rules and Etiquette</span>
+                <span class="agreement-checkbox__label">
+                  I agree to the
+                  <a
+                    v-if="rulesEtiquetteUrl"
+                    :href="rulesEtiquetteUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="agreement-link"
+                    @click.stop
+                  >
+                    Garden Rules and Etiquette
+                  </a>
+                  <template v-else>Garden Rules and Etiquette</template>
+                </span>
               </label>
               <label class="agreement-checkbox">
                 <input v-model="form.agreeWaiver" type="checkbox" />
                 <span class="agreement-checkbox__box" aria-hidden="true"></span>
-                <span class="agreement-checkbox__label">I agree to the Liability Waiver</span>
+                <span class="agreement-checkbox__label">
+                  I agree to the
+                  <a
+                    v-if="liabilityWaiverUrl"
+                    :href="liabilityWaiverUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="agreement-link"
+                    @click.stop
+                  >
+                    Liability Waiver
+                  </a>
+                  <template v-else>Liability Waiver</template>
+                </span>
               </label>
             </div>
           </v-col>
@@ -574,5 +612,11 @@ onUnmounted(() => {
 
 .agreement-checkbox__label {
   line-height: 1.4;
+}
+
+.agreement-link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
 }
 </style>

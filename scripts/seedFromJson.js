@@ -15,6 +15,18 @@ import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getDatabase, ref as dbRef, set } from 'firebase/database';
 
 const readJson = (path) => JSON.parse(fs.readFileSync(path, 'utf-8'));
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const sanitizePartners = (partners) =>
+  Array.isArray(partners)
+    ? partners.map((partner) => {
+        const rawName = typeof partner?.name === 'string' ? partner.name.trim() : '';
+        const rawEmail = typeof partner?.email === 'string' ? partner.email.trim().toLowerCase() : '';
+        return {
+          name: rawName || null,
+          email: rawEmail && isValidEmail(rawEmail) ? rawEmail : null
+        };
+      })
+    : [];
 
 const loadEnvFile = (path) => {
   if (!fs.existsSync(path)) {
@@ -108,7 +120,14 @@ const seed = async () => {
     }
 
     if (registrationsJson?.gardeners) {
-      await set(dbRef(database, 'gardeners'), registrationsJson.gardeners);
+      await Promise.all(
+        Object.entries(registrationsJson.gardeners).map(([gardenerId, gardenerValue]) =>
+          set(dbRef(database, `gardeners/${gardenerId}`), {
+            ...gardenerValue,
+            partners: sanitizePartners(gardenerValue?.partners)
+          })
+        )
+      );
       console.log('Gardeners seeded successfully');
     }
   } finally {

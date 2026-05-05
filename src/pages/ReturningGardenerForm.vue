@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import PublicPageHeader from '@/components/PublicPageHeader.vue';
 import UafAffiliationSelector from '@/components/UafAffiliationSelector.vue';
 import { database } from '@/services/firebaseConfig';
@@ -25,8 +25,9 @@ const form = ref({
 
 const loading = ref(false);
 const submitted = ref(false);
-const registrationOpen = ref(false);
+const returningRegistrationOpen = ref(false);
 const settingsLoaded = ref(false);
+const rulesLinks = ref([]);
 
 const emailKeyFromEmail = (email) =>
   email
@@ -54,12 +55,25 @@ const resetForm = () => {
   };
 };
 
+const findCmsRuleLink = (matcher) => {
+  const entry = rulesLinks.value.find((rule) => matcher.test(String(rule?.text || '')));
+  const url = String(entry?.url || '').trim();
+  return url || '';
+};
+
+const rulesEtiquetteUrl = computed(() => findCmsRuleLink(/rules?|etiquette/i));
+const liabilityWaiverUrl = computed(() => findCmsRuleLink(/waiver|liability/i));
+
 const loadCmsSettings = async () => {
   try {
     const cmsRef = dbRef(database, 'cms');
     const snapshot = await get(cmsRef);
     if (snapshot.exists()) {
-      registrationOpen.value = snapshot.val().registrationOpen === true;
+      const cms = snapshot.val();
+      returningRegistrationOpen.value =
+        cms.returningRegistrationOpen === true ||
+        (cms.returningRegistrationOpen === undefined && cms.registrationOpen === true);
+      rulesLinks.value = Array.isArray(cms.rules) ? cms.rules : [];
     }
   } finally {
     settingsLoaded.value = true;
@@ -160,7 +174,7 @@ loadCmsSettings();
         If you submit this form more than once with the same email address, your previous submission will be overwritten.
       </v-alert>
 
-      <template v-if="settingsLoaded && registrationOpen">
+      <template v-if="settingsLoaded && returningRegistrationOpen">
         <v-alert v-if="submitted" type="success" class="mb-6">
           Thank you for submitting your returning gardener interest form. We will follow up by email.
         </v-alert>
@@ -288,13 +302,41 @@ loadCmsSettings();
               <label class="agreement-checkbox">
                 <input v-model="form.agreeRules" type="checkbox" />
                 <span class="agreement-checkbox__box" aria-hidden="true"></span>
-                <span class="agreement-checkbox__label">I agree to the Garden Rules and Etiquette (required).</span>
+                <span class="agreement-checkbox__label">
+                  I agree to the
+                  <a
+                    v-if="rulesEtiquetteUrl"
+                    :href="rulesEtiquetteUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="agreement-link"
+                    @click.stop
+                  >
+                    Garden Rules and Etiquette
+                  </a>
+                  <template v-else>Garden Rules and Etiquette</template>
+                  (required).
+                </span>
               </label>
 
               <label class="agreement-checkbox">
                 <input v-model="form.agreeLiability" type="checkbox" />
                 <span class="agreement-checkbox__box" aria-hidden="true"></span>
-                <span class="agreement-checkbox__label">I agree to the Garden Liability Waiver (required).</span>
+                <span class="agreement-checkbox__label">
+                  I agree to the
+                  <a
+                    v-if="liabilityWaiverUrl"
+                    :href="liabilityWaiverUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="agreement-link"
+                    @click.stop
+                  >
+                    Garden Liability Waiver
+                  </a>
+                  <template v-else>Garden Liability Waiver</template>
+                  (required).
+                </span>
               </label>
             </div>
           </v-col>
@@ -389,5 +431,11 @@ loadCmsSettings();
 
 .agreement-checkbox__label {
   line-height: 1.4;
+}
+
+.agreement-link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
 }
 </style>

@@ -326,6 +326,27 @@ const getPlotFillColor = (plotId, plot) => {
   return statusColors.available;
 };
 
+const findPlotAtCoordinates = (x, y, { selectableOnly = false } = {}) => {
+  for (const [plotId, plot] of Object.entries(plots.value)) {
+    if (!hasPlotGeometry(plot)) continue;
+    if (
+      x < plot.x ||
+      x > plot.x + plot.width ||
+      y < plot.y ||
+      y > plot.y + plot.height
+    ) {
+      continue;
+    }
+    if (selectableOnly && (isSpecialProject(plot) || plot.status !== 'available')) {
+      continue;
+    }
+
+    return { plotId, plot };
+  }
+
+  return null;
+};
+
 // Handle canvas click
 const handleCanvasClick = (event) => {
   if (!props.registrationOpen) {
@@ -337,22 +358,11 @@ const handleCanvasClick = (event) => {
   const rect = canvas.getBoundingClientRect();
   const clickX = (event.clientX - rect.left) / scale;
   const clickY = (event.clientY - rect.top) / scale;
+  const hit = findPlotAtCoordinates(clickX, clickY, { selectableOnly: true });
 
-  // Find clicked plot
-  for (const [plotId, plot] of Object.entries(plots.value)) {
-    if (!hasPlotGeometry(plot)) continue;
-    if (isSpecialProject(plot) || plot.status !== 'available') continue;
-    if (
-      clickX >= plot.x &&
-      clickX <= plot.x + plot.width &&
-      clickY >= plot.y &&
-      clickY <= plot.y + plot.height
-    ) {
-      // Emit plot-selected event
-      const event = new CustomEvent('plot-selected', { detail: { plotId } });
-      window.dispatchEvent(event);
-      return;
-    }
+  if (hit) {
+    const event = new CustomEvent('plot-selected', { detail: { plotId: hit.plotId } });
+    window.dispatchEvent(event);
   }
 };
 
@@ -363,22 +373,12 @@ const handleCanvasMouseMove = (event) => {
   const rect = canvas.getBoundingClientRect();
   const mouseX = (event.clientX - rect.left) / scale;
   const mouseY = (event.clientY - rect.top) / scale;
+  const hit = findPlotAtCoordinates(mouseX, mouseY);
 
   hoveredPlot.value = null;
-
-  // Find hovered plot
-  for (const [plotId, plot] of Object.entries(plots.value)) {
-    if (!hasPlotGeometry(plot)) continue;
-    if (
-      mouseX >= plot.x &&
-      mouseX <= plot.x + plot.width &&
-      mouseY >= plot.y &&
-      mouseY <= plot.y + plot.height
-    ) {
-      hoveredPlot.value = { plotId, ...plot };
-      tooltipPos.value = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-      return;
-    }
+  if (hit) {
+    hoveredPlot.value = { plotId: hit.plotId, ...hit.plot };
+    tooltipPos.value = { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
 };
 
@@ -388,15 +388,11 @@ const handleCanvasMouseLeave = () => {
 
 // Get tooltip text based on plot status
 const getTooltipText = (plot) => {
-  if (isSpecialProject(plot) || plot.status === 'unavailable' || plot.status === 'verified') {
-    return 'Plot unavailable';
-  } else if (plot.status === 'available') {
+  if (plot.status === 'available' && !isSpecialProject(plot)) {
     return 'Plot available';
-  } else if (plot.status === 'reserved') {
-    return 'Plot unavailable';
-  } else {
-    return 'Plot unavailable';
   }
+
+  return 'Plot unavailable';
 };
 
 const getTooltipGardener = (plot) => {

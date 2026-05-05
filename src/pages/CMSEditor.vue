@@ -20,6 +20,7 @@ const cmsContent = ref({
   welcome: '',
   pleaseNote: '',
   registrationOpen: false,
+  returningRegistrationOpen: false,
   bannerImageUrl: '',
   prices: '',
   rules: [],
@@ -50,6 +51,9 @@ const loadContent = async () => {
         welcome: value.welcome || '',
         pleaseNote: value.pleaseNote || '',
         registrationOpen: value.registrationOpen === true,
+        returningRegistrationOpen:
+          value.returningRegistrationOpen === true ||
+          (value.returningRegistrationOpen === undefined && value.registrationOpen === true),
         bannerImageUrl: value.bannerImageUrl || '',
         prices: value.prices || '',
         rules: Array.isArray(value.rules) ? value.rules : [],
@@ -285,8 +289,18 @@ onMounted(async () => {
       <v-col cols="12">
         <v-switch
           v-model="cmsContent.registrationOpen"
-          label="Registration Open"
-          hint="When off, the public registration forms are hidden."
+          label="Plot registration form open"
+          hint="Controls only the /plot-registration form."
+          persistent-hint
+          color="success"
+          inset
+        ></v-switch>
+      </v-col>
+      <v-col cols="12">
+        <v-switch
+          v-model="cmsContent.returningRegistrationOpen"
+          label="Returning gardener form open"
+          hint="Controls only the /returning-gardener form."
           persistent-hint
           color="success"
           inset

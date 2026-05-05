@@ -126,7 +126,7 @@ addColumn(range(139, 142), LEFT_X, SECTION_4_TOP, 'landscape');
 addColumn(range(130, 135), MIDDLE_X, SECTION_4_TOP, 'landscape');
 addColumn(range(136, 138), RIGHT_PORTRAIT_X, SECTION_4_TOP, 'portrait');
 
-export const manualPlots = plots;
+const manualPlots = plots;
 
 export const manualPlotsById = Object.fromEntries(
   manualPlots.map((plot) => [
