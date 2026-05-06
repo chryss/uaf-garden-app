@@ -80,27 +80,27 @@ const csvToObjects = (text) => {
   );
 };
 
+const AFFILIATION_RULES = [
+  ['student', 'Student'],
+  ['emerit', 'Emeriti'],
+  ['faculty', 'Faculty'],
+  ['staff', 'Staff'],
+  ['none', 'None']
+];
+
+const STUDENT_TYPE_RULES = [
+  ['undergraduate', 'Undergraduate'],
+  ['graduate', 'Graduate'],
+  ['non-degree', 'Non-Degree Seeking']
+];
+
 const normalizeAffiliation = (row) => {
   const source = `${row.uaf_affiliation || ''} ${row.department_affiliation || ''}`.toLowerCase();
 
-  if (source.includes('student')) {
-    return 'Student';
-  }
-
-  if (source.includes('emerit')) {
-    return 'Emeriti';
-  }
-
-  if (source.includes('faculty')) {
-    return 'Faculty';
-  }
-
-  if (source.includes('staff')) {
-    return 'Staff';
-  }
-
-  if (source.includes('none')) {
-    return 'None';
+  for (const [needle, value] of AFFILIATION_RULES) {
+    if (source.includes(needle)) {
+      return value;
+    }
   }
 
   return 'None';
@@ -109,12 +109,10 @@ const normalizeAffiliation = (row) => {
 const normalizeStudentType = (row) => {
   const source = `${row.student_status || ''}`.toLowerCase();
 
-  if (source.includes('undergraduate')) {
-    return 'Undergraduate';
-  }
-
-  if (source.includes('graduate')) {
-    return 'Graduate';
+  for (const [needle, value] of STUDENT_TYPE_RULES) {
+    if (source.includes(needle)) {
+      return value;
+    }
   }
 
   return null;

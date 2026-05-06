@@ -15,7 +15,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'update:studentType']);
 
 const affiliationOptions = ['Student', 'Faculty', 'Staff', 'Emeriti', 'None'];
-const studentTypeOptions = ['Graduate', 'Undergraduate'];
+const studentTypeOptions = ['Graduate', 'Undergraduate', 'Non-Degree Seeking'];
 
 const normalizeAffiliations = (values) => {
   const selected = Array.isArray(values) ? values : [];

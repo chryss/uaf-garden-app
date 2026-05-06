@@ -530,7 +530,8 @@ onUnmounted(() => {
   justify-content: center;
   flex-wrap: wrap;
   padding: 12px;
-  background: #f9f9f9;
+  background: rgba(var(--v-theme-surface), 0.92);
+  color: rgb(var(--v-theme-on-surface));
   border-radius: 4px;
 }
 
@@ -544,7 +545,7 @@ onUnmounted(() => {
 .color-box {
   width: 20px;
   height: 20px;
-  border: 1px solid #333;
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.55);
   border-radius: 2px;
 }
 </style>

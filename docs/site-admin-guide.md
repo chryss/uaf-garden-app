@@ -71,6 +71,12 @@ Important guardrails:
 ## 7. CMS settings
 
 Use **Settings** to update site text and links, including key content sections shown on public pages.
+You can also control:
+
+- Plot registration form open/closed
+- Returning gardener form open/closed
+- Maximum plots per gardener (1-4) for new registrations by email
+- Per-email plot limit overrides (for exceptions such as clubs)
 
 ## 8. CSV exports
 

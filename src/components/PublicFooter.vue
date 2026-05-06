@@ -17,8 +17,8 @@
 .public-footer {
   margin-top: 32px;
   padding: 20px 0 28px;
-  background: #f4f7fb;
-  color: rgba(0, 0, 0, 0.72);
+  background: rgba(var(--v-theme-surface), 0.92);
+  color: rgba(var(--v-theme-on-surface), 0.72);
 }
 
 .public-footer__inner {

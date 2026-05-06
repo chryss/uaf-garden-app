@@ -908,7 +908,7 @@ onMounted(loadData);
 
 .returning-table-shell {
   overflow: hidden;
-  background: #fff;
+  background: rgb(var(--v-theme-surface));
 }
 
 .returning-table :deep(th) {
@@ -917,7 +917,7 @@ onMounted(loadData);
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.01em;
-  color: rgba(0, 0, 0, 0.62);
+  color: rgba(var(--v-theme-on-surface), 0.62);
   background: transparent !important;
   border: 0;
   border-bottom: 0 !important;
@@ -926,18 +926,19 @@ onMounted(loadData);
 }
 
 .returning-table :deep(thead th) {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.16) !important;
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.16) !important;
 }
 
 .returning-table :deep(thead tr) {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.16);
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.16);
 }
 
 .returning-table :deep(td) {
   font-size: 0.8rem;
   height: 40px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
-  background: #fff;
+  color: rgb(var(--v-theme-on-surface));
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  background: rgb(var(--v-theme-surface));
 }
 
 .returning-table :deep(tbody tr:last-child td) {
@@ -998,7 +999,7 @@ onMounted(loadData);
   min-width: 20px;
   width: 20px;
   height: 20px;
-  color: rgba(0, 0, 0, 0.54);
+  color: rgba(var(--v-theme-on-surface), 0.54);
 }
 
 .returning-table__actions {
@@ -1021,7 +1022,7 @@ onMounted(loadData);
 
 .returning-table__empty {
   text-align: center;
-  color: rgba(0, 0, 0, 0.56);
+  color: rgba(var(--v-theme-on-surface), 0.56);
   padding: 16px 10px !important;
 }
 

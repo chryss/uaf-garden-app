@@ -752,7 +752,7 @@ watch([sortKey, sortDirection, searchQuery], () => {
 
 .returning-table-shell {
   overflow: hidden;
-  background: #fff;
+  background: rgb(var(--v-theme-surface));
 }
 
 .returning-table :deep(th) {
@@ -761,7 +761,7 @@ watch([sortKey, sortDirection, searchQuery], () => {
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.01em;
-  color: rgba(0, 0, 0, 0.62);
+  color: rgba(var(--v-theme-on-surface), 0.62);
   background: transparent !important;
   border: 0;
   border-bottom: 0 !important;
@@ -770,18 +770,19 @@ watch([sortKey, sortDirection, searchQuery], () => {
 }
 
 .returning-table :deep(thead th) {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.16) !important;
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.16) !important;
 }
 
 .returning-table :deep(thead tr) {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.16);
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.16);
 }
 
 .returning-table :deep(td) {
   font-size: 0.8rem;
   height: 40px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
-  background: #fff;
+  color: rgb(var(--v-theme-on-surface));
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  background: rgb(var(--v-theme-surface));
 }
 
 .returning-table__select {
@@ -826,7 +827,7 @@ watch([sortKey, sortDirection, searchQuery], () => {
 
 .returning-table__empty {
   text-align: center;
-  color: rgba(0, 0, 0, 0.56);
+  color: rgba(var(--v-theme-on-surface), 0.56);
   padding: 18px 10px !important;
 }
 

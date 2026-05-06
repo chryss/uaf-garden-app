@@ -11,7 +11,7 @@ const form = ref({
   lastName: '',
   email: '',
   affiliations: [],
-  studentType: '',  // Graduate, Undergraduate (only if affiliation = Student)
+  studentType: '',  // Graduate, Undergraduate or Non-Degree Seeking (only if affiliation = Student)
   plots: [{ plotId: '' }],  // Array of plot selections
   agreeRules: false,
   agreeWaiver: false,
@@ -25,15 +25,17 @@ const plots = ref([]);
 const loading = ref(false);
 const submitted = ref(false);
 const maxPlots = ref(2);  // Default, can be set from CMS
+const plotLimitOverridesByEmail = ref({});
 const registrationOpen = ref(false);
 const settingsLoaded = ref(false);
 const rulesLinks = ref([]);
-const paymentUrl = 'https://epay.alaska.edu/C21563_ustores/web/store_cat.jsp?STOREID=88&CATID=278';
+const paymentURL = 'https://epay.alaska.edu/C21563_ustores/web/store_main.jsp?STOREID=88';
 const selectedPlotIds = computed(() =>
   form.value.plots
     .map((plot) => plot.plotId)
     .filter(Boolean)
 );
+const currentMaxPlots = computed(() => plotLimitOverridesByEmail.value[normalizeEmail(form.value.email)] || maxPlots.value);
 
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 
@@ -52,6 +54,22 @@ const findCmsRuleLink = (matcher) => {
 
 const rulesEtiquetteUrl = computed(() => findCmsRuleLink(/rules?|etiquette/i));
 const liabilityWaiverUrl = computed(() => findCmsRuleLink(/waiver|liability/i));
+const normalizePlotLimitOverrides = (rawValue) => {
+  const rawEntries = Array.isArray(rawValue)
+    ? rawValue
+    : (rawValue && typeof rawValue === 'object')
+      ? Object.entries(rawValue).map(([email, maxPlots]) => ({ email, maxPlots }))
+      : [];
+
+  return rawEntries.reduce((acc, entry) => {
+    const email = normalizeEmail(entry?.email || '');
+    const maxPlotsValue = Number(entry?.maxPlots);
+    if (email && Number.isInteger(maxPlotsValue) && maxPlotsValue >= 1) {
+      acc[email] = maxPlotsValue;
+    }
+    return acc;
+  }, {});
+};
 
 // Load available plots
 const loadPlots = async () => {
@@ -72,6 +90,9 @@ const loadCmsSettings = async () => {
     if (snapshot.exists()) {
       const cms = snapshot.val();
       registrationOpen.value = cms.registrationOpen === true;
+      const configuredLimit = Number(cms.maxPlotsPerGardener);
+      maxPlots.value = [1, 2, 3, 4].includes(configuredLimit) ? configuredLimit : 2;
+      plotLimitOverridesByEmail.value = normalizePlotLimitOverrides(cms.plotLimitOverrides || cms.plotLimitOverridesByEmail);
       rulesLinks.value = Array.isArray(cms.rules) ? cms.rules : [];
     }
   } finally {
@@ -88,7 +109,7 @@ const removePartner = (index) => {
 };
 
 const addPlot = () => {
-  if (form.value.plots.length < maxPlots.value) {
+  if (form.value.plots.length < currentMaxPlots.value) {
     form.value.plots.push({ plotId: '' });
     // Scroll to canvas to select a plot
     setTimeout(() => {
@@ -106,6 +127,27 @@ const removePlot = (index) => {
 };
 
 const getSelectedPlot = (plotId) => plots.value.find((plot) => plot.id === plotId);
+
+const collectPlotIdsFromGardener = (gardener) =>
+  [
+    gardener?.plotId,
+    ...(Array.isArray(gardener?.plots) ? gardener.plots : [])
+  ]
+    .filter(Boolean)
+    .map((plotId) => String(plotId).trim());
+
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const sanitizePartnersFromForm = (partners = []) =>
+  partners
+    .map((partner) => {
+      const name = String(partner?.name || '').trim();
+      const emailRaw = normalizeEmail(partner?.email || '');
+      return {
+        name: name || null,
+        email: emailRaw && isValidEmail(emailRaw) ? emailRaw : null
+      };
+    })
+    .filter((partner) => partner.name || partner.email);
 
 const submit = async () => {
   // Validate required fields
@@ -149,14 +191,40 @@ const submit = async () => {
     const gardenerRef = dbRef(database, `gardeners/${gardenerId}`);
     const existingGardenerSnapshot = await get(gardenerRef);
     const existingGardener = existingGardenerSnapshot.exists() ? existingGardenerSnapshot.val() : null;
+    const existingPlotIdsFromRecord = collectPlotIdsFromGardener(existingGardener);
+    const existingPlotIdsFromAssignments = plots.value
+      .filter((plot) => plot?.registeredGardenerId === gardenerId)
+      .map((plot) => String(plot.id || '').trim())
+      .filter(Boolean);
+
+    let existingPlotIdsFromEmailMatches = [];
+    try {
+      const gardenersSnapshot = await get(dbRef(database, 'gardeners'));
+      if (gardenersSnapshot.exists()) {
+        existingPlotIdsFromEmailMatches = Object.values(gardenersSnapshot.val())
+          .filter((gardener) => normalizeEmail(gardener?.email) === normalizedEmail)
+          .flatMap((gardener) => collectPlotIdsFromGardener(gardener));
+      }
+    } catch {
+      // Public clients may not have read access to /gardeners; ID + plot-assignment checks still apply.
+    }
+
     const existingPlotIds = [
-      existingGardener?.plotId,
-      ...(Array.isArray(existingGardener?.plots) ? existingGardener.plots : [])
-    ]
-      .filter(Boolean)
-      .map((plotId) => String(plotId).trim());
+      ...new Set([
+        ...existingPlotIdsFromRecord,
+        ...existingPlotIdsFromAssignments,
+        ...existingPlotIdsFromEmailMatches
+      ])
+    ];
 
     const mergedPlotIds = [...new Set([...existingPlotIds, ...selectedPlotIdsForSubmission])];
+    const isAddingNewPlots = mergedPlotIds.length > existingPlotIds.length;
+    const effectiveMaxPlots = plotLimitOverridesByEmail.value[normalizedEmail] || maxPlots.value;
+
+    if (mergedPlotIds.length > effectiveMaxPlots && isAddingNewPlots) {
+      alert(`This gardener can register up to ${effectiveMaxPlots} plot${effectiveMaxPlots === 1 ? '' : 's'}.`);
+      return;
+    }
 
     await set(gardenerRef, {
       ...(existingGardener || {}),
@@ -168,7 +236,7 @@ const submit = async () => {
       studentType: form.value.affiliations.includes('Student') ? form.value.studentType : null,
       plotId: mergedPlotIds[0] || selectedPlotIdsForSubmission[0],
       plots: mergedPlotIds,
-      partners: form.value.partners.filter(p => p.name || p.email),
+      partners: sanitizePartnersFromForm(form.value.partners),
       agreeRules: form.value.agreeRules,
       agreeWaiver: form.value.agreeWaiver,
       paymentVerified: false,
@@ -380,7 +448,7 @@ onUnmounted(() => {
           </v-col>
           <v-col cols="12" sm="6" md="auto" class="d-flex align-end">
             <v-btn
-              v-if="form.plots.length < maxPlots"
+              v-if="form.plots.length < currentMaxPlots"
               @click="addPlot"
               color="primary"
               variant="outlined"

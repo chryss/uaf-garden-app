@@ -4,6 +4,8 @@
     "pleaseNote": "We expect registration to open on or around May 5, 2026. Registration will proceed in tiers, starting with returning gardeners. Please wait for registration to open.",
     "registrationOpen": false,
     "returningRegistrationOpen": false,
+    "maxPlotsPerGardener": 2,
+    "plotLimitOverrides": [],
     "bannerImageUrl": "",
     "prices": "Students: $ 20 (first plot and additional plots)\nRegular pricing: $40 (first plot), $30 (each additional plot)",
     "rules": [

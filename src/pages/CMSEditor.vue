@@ -21,6 +21,8 @@ const cmsContent = ref({
   pleaseNote: '',
   registrationOpen: false,
   returningRegistrationOpen: false,
+  maxPlotsPerGardener: 2,
+  plotLimitOverrides: [],
   bannerImageUrl: '',
   prices: '',
   rules: [],
@@ -31,9 +33,35 @@ const newRuleText = ref('');
 const newRuleUrl = ref('');
 const newResourceText = ref('');
 const newResourceUrl = ref('');
+const newOverrideEmail = ref('');
+const newOverrideLimit = ref(2);
 
 const normalizeEmail = (email) => email.trim().toLowerCase();
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const parseOverrideLimit = (value) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 20 ? parsed : null;
+};
+
+const normalizePlotLimitOverrides = (rawValue) => {
+  const rawEntries = Array.isArray(rawValue)
+    ? rawValue
+    : (rawValue && typeof rawValue === 'object')
+      ? Object.entries(rawValue).map(([email, maxPlots]) => ({ email, maxPlots }))
+      : [];
+
+  return rawEntries
+    .map((entry) => {
+      const email = normalizeEmail(entry?.email || '');
+      const maxPlots = parseOverrideLimit(entry?.maxPlots);
+      if (!isValidEmail(email) || maxPlots === null) {
+        return null;
+      }
+      return { email, maxPlots };
+    })
+    .filter(Boolean)
+    .filter((entry, index, arr) => arr.findIndex((current) => current.email === entry.email) === index);
+};
 
 const generateTempPassword = () => {
   const random = Math.random().toString(36).slice(-10);
@@ -47,6 +75,7 @@ const loadContent = async () => {
     const snapshot = await get(cmsRef);
     if (snapshot.exists()) {
       const value = snapshot.val();
+      const configuredLimit = Number(value.maxPlotsPerGardener);
       cmsContent.value = {
         welcome: value.welcome || '',
         pleaseNote: value.pleaseNote || '',
@@ -54,6 +83,8 @@ const loadContent = async () => {
         returningRegistrationOpen:
           value.returningRegistrationOpen === true ||
           (value.returningRegistrationOpen === undefined && value.registrationOpen === true),
+        maxPlotsPerGardener: [1, 2, 3, 4].includes(configuredLimit) ? configuredLimit : 2,
+        plotLimitOverrides: normalizePlotLimitOverrides(value.plotLimitOverrides || value.plotLimitOverridesByEmail),
         bannerImageUrl: value.bannerImageUrl || '',
         prices: value.prices || '',
         rules: Array.isArray(value.rules) ? value.rules : [],
@@ -165,7 +196,10 @@ const saveContent = async () => {
   saving.value = true;
   try {
     const cmsRef = dbRef(database, 'cms');
-    await set(cmsRef, cmsContent.value);
+    await set(cmsRef, {
+      ...cmsContent.value,
+      plotLimitOverrides: normalizePlotLimitOverrides(cmsContent.value.plotLimitOverrides)
+    });
     alert('Content saved successfully!');
   } catch (error) {
     console.error('Error saving content:', error);
@@ -209,6 +243,37 @@ const addResource = () => {
 
 const removeResource = (index) => {
   cmsContent.value.resources = cmsContent.value.resources.filter((_, currentIndex) => currentIndex !== index);
+};
+
+const addPlotLimitOverride = () => {
+  const email = normalizeEmail(newOverrideEmail.value || '');
+  const maxPlots = parseOverrideLimit(newOverrideLimit.value);
+
+  if (!isValidEmail(email) || maxPlots === null) {
+    alert('Enter a valid email and a max plots value between 1 and 20.');
+    return;
+  }
+
+  const existingIndex = (cmsContent.value.plotLimitOverrides || []).findIndex(
+    (entry) => normalizeEmail(entry.email || '') === email
+  );
+
+  if (existingIndex >= 0) {
+    cmsContent.value.plotLimitOverrides[existingIndex] = { email, maxPlots };
+  } else {
+    cmsContent.value.plotLimitOverrides = [
+      ...(cmsContent.value.plotLimitOverrides || []),
+      { email, maxPlots }
+    ];
+  }
+
+  newOverrideEmail.value = '';
+  newOverrideLimit.value = 2;
+};
+
+const removePlotLimitOverride = (index) => {
+  cmsContent.value.plotLimitOverrides =
+    (cmsContent.value.plotLimitOverrides || []).filter((_, currentIndex) => currentIndex !== index);
 };
 
 onMounted(async () => {
@@ -305,6 +370,69 @@ onMounted(async () => {
           color="success"
           inset
         ></v-switch>
+      </v-col>
+      <v-col cols="12" md="4">
+        <v-select
+          v-model="cmsContent.maxPlotsPerGardener"
+          :items="[1, 2, 3, 4]"
+          label="Max plots per gardener"
+          hint="Applies to new plot registrations, identified by email."
+          persistent-hint
+          variant="outlined"
+        ></v-select>
+      </v-col>
+    </v-row>
+
+    <v-row class="mb-6">
+      <v-col cols="12">
+        <h3 class="text-h6 mb-4">Plot Limit Overrides by Email</h3>
+        <v-card
+          class="mb-4 pa-4"
+          v-for="(override, index) in cmsContent.plotLimitOverrides"
+          :key="`plot-limit-override-${index}`"
+        >
+          <v-row>
+            <v-col cols="12" md="7">
+              <v-text-field
+                v-model="override.email"
+                label="Email"
+                type="email"
+              ></v-text-field>
+            </v-col>
+            <v-col cols="12" md="3">
+              <v-text-field
+                v-model.number="override.maxPlots"
+                label="Max plots"
+                type="number"
+                min="1"
+                max="20"
+              ></v-text-field>
+            </v-col>
+          </v-row>
+          <v-btn size="small" color="error" @click="removePlotLimitOverride(index)">Remove</v-btn>
+        </v-card>
+
+        <v-card class="mb-4 pa-4">
+          <v-row>
+            <v-col cols="12" md="7">
+              <v-text-field
+                v-model="newOverrideEmail"
+                label="Override email"
+                type="email"
+              ></v-text-field>
+            </v-col>
+            <v-col cols="12" md="3">
+              <v-text-field
+                v-model.number="newOverrideLimit"
+                label="Max plots"
+                type="number"
+                min="1"
+                max="20"
+              ></v-text-field>
+            </v-col>
+          </v-row>
+          <v-btn color="success" @click="addPlotLimitOverride">Add override</v-btn>
+        </v-card>
       </v-col>
     </v-row>
 
