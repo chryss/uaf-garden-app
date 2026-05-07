@@ -135,3 +135,26 @@ Rules file: `firebase/database.rules.json`
   - Check exact path in error and compare against rules
 - UI loads but data empty:
   - Verify `VITE_FIREBASE_DATABASE_URL` and project env values
+
+## 9. Current milestone + design status snapshot
+
+### Current implemented milestones
+
+- Public registration and returning-gardener forms are in place and CMS-driven.
+- Admin dashboard includes Plot Reservations, Returning Gardeners, Plots & Landmarks, and Settings.
+- CMS controls independent open/closed state for both public forms.
+- Global plot cap and per-email plot-cap overrides are implemented.
+
+### Design parameters currently in force
+
+- Gardener identity key: `gardener-<email-slug>`
+- Plot types: `regular`, `needs work`, `special project`
+- Plot statuses: `available`, `reserved`, `verified`, `unavailable`
+- Global max plots per gardener: `cms.maxPlotsPerGardener` (default 2; UI options 1-4)
+- Per-email cap overrides: `cms.plotLimitOverrides` entries `{ email, maxPlots }`
+
+### Deploy safety note (important)
+
+- Build output always uses the env vars present at build time.
+- For staging (`cw-trtrtr`): `set -a && source .env.local && set +a && npm run build`
+- For production (`uaf-garden`): `set -a && source .env.production && set +a && npm run build`

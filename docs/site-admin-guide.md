@@ -78,6 +78,11 @@ You can also control:
 - Maximum plots per gardener (1-4) for new registrations by email
 - Per-email plot limit overrides (for exceptions such as clubs)
 
+Current behavior notes:
+
+- Per-email overrides take precedence over the global max-plot value.
+- Lowering the global max affects new registration attempts, but does not automatically invalidate existing gardener records.
+
 ## 8. CSV exports
 
 - Plot reservations export includes gardener and related plot fields.
