@@ -174,46 +174,38 @@ const submit = async () => {
     return;
   }
 
-  const hasUnavailableSelection = selectedPlotIdsForSubmission.some((plotId) => {
-    const selectedPlot = getSelectedPlot(plotId);
-    return !selectedPlot || selectedPlot.type === 'special project' || selectedPlot.status !== 'available';
-  });
-
-  if (hasUnavailableSelection) {
-    alert('Please select an available plot.');
-    return;
-  }
-
   loading.value = true;
   try {
     const normalizedEmail = normalizeEmail(form.value.email);
     const gardenerId = makeGardenerIdFromEmail(normalizedEmail);
+    const selectedPlotSnapshots = await Promise.all(
+      selectedPlotIdsForSubmission.map((plotId) => get(dbRef(database, `plots/${plotId}`)))
+    );
+    const selectedPlotStates = selectedPlotIdsForSubmission.map((plotId, index) => ({
+      plotId,
+      ...(selectedPlotSnapshots[index].exists() ? selectedPlotSnapshots[index].val() : null)
+    }));
+
+    const hasUnavailableSelection = selectedPlotStates.some((plot) =>
+      !plot ||
+      plot.type === 'special project' ||
+      (plot.status !== 'available' && plot.registeredGardenerId !== gardenerId)
+    );
+
+    if (hasUnavailableSelection) {
+      alert('Please select an available plot.');
+      return;
+    }
+
     const gardenerRef = dbRef(database, `gardeners/${gardenerId}`);
-    const existingGardenerSnapshot = await get(gardenerRef);
-    const existingGardener = existingGardenerSnapshot.exists() ? existingGardenerSnapshot.val() : null;
-    const existingPlotIdsFromRecord = collectPlotIdsFromGardener(existingGardener);
     const existingPlotIdsFromAssignments = plots.value
       .filter((plot) => plot?.registeredGardenerId === gardenerId)
       .map((plot) => String(plot.id || '').trim())
       .filter(Boolean);
 
-    let existingPlotIdsFromEmailMatches = [];
-    try {
-      const gardenersSnapshot = await get(dbRef(database, 'gardeners'));
-      if (gardenersSnapshot.exists()) {
-        existingPlotIdsFromEmailMatches = Object.values(gardenersSnapshot.val())
-          .filter((gardener) => normalizeEmail(gardener?.email) === normalizedEmail)
-          .flatMap((gardener) => collectPlotIdsFromGardener(gardener));
-      }
-    } catch {
-      // Public clients may not have read access to /gardeners; ID + plot-assignment checks still apply.
-    }
-
     const existingPlotIds = [
       ...new Set([
-        ...existingPlotIdsFromRecord,
-        ...existingPlotIdsFromAssignments,
-        ...existingPlotIdsFromEmailMatches
+        ...existingPlotIdsFromAssignments
       ])
     ];
 
@@ -226,8 +218,12 @@ const submit = async () => {
       return;
     }
 
+    const existingPlotIdSet = new Set(existingPlotIds);
+    const plotIdsToReserve = selectedPlotStates
+      .filter((plot) => plot?.status === 'available' && !existingPlotIdSet.has(plot.plotId))
+      .map((plot) => plot.plotId);
+
     await set(gardenerRef, {
-      ...(existingGardener || {}),
       firstName: form.value.firstName,
       lastName: form.value.lastName,
       email: normalizedEmail,
@@ -240,11 +236,11 @@ const submit = async () => {
       agreeRules: form.value.agreeRules,
       agreeWaiver: form.value.agreeWaiver,
       paymentVerified: false,
-      createdAt: existingGardener?.createdAt || new Date().toISOString(),
+      createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     });
     await Promise.all(
-      selectedPlotIdsForSubmission.map((plotId) =>
+      plotIdsToReserve.map((plotId) =>
         update(dbRef(database, `plots/${plotId}`), {
           status: 'reserved',
           paymentVerified: false,
@@ -278,7 +274,7 @@ const submit = async () => {
     };
   } catch (error) {
     console.error('Error submitting form:', error);
-    alert('Error submitting form. Please try again.');
+    alert(`Error submitting form. ${error?.message || 'Please try again.'}`);
   } finally {
     loading.value = false;
   }

@@ -6,7 +6,19 @@
     },
     "plots": {
       ".read": true,
-      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
+      "$plotId": {
+        ".write": "(auth != null && root.child('admins').child(auth.uid).exists()) || (auth == null && data.exists() && data.child('status').val() === 'available' && newData.child('status').val() === 'reserved' && data.child('paymentVerified').val() === false && newData.child('paymentVerified').val() === false && !data.child('registeredGardenerId').exists() && newData.child('registeredGardenerId').isString() && newData.child('registeredGardenerId').val().matches(/^gardener-[a-z0-9-]+$/) && newData.child('name').val() === data.child('name').val() && newData.child('type').val() === data.child('type').val() && newData.child('x').val() === data.child('x').val() && newData.child('y').val() === data.child('y').val() && newData.child('width').val() === data.child('width').val() && newData.child('height').val() === data.child('height').val())",
+        "status": {
+          ".validate": "newData.isString() && (newData.val() === 'available' || newData.val() === 'reserved' || newData.val() === 'verified' || newData.val() === 'unavailable')"
+        },
+        "paymentVerified": {
+          ".validate": "newData.isBoolean()"
+        },
+        "registeredGardenerId": {
+          ".validate": "newData.val() === null || (newData.isString() && newData.val().matches(/^gardener-[a-z0-9-]+$/))"
+        }
+      }
     },
     "landmarks": {
       ".read": true,
@@ -17,6 +29,39 @@
       "$gardenerId": {
         ".write": "(auth != null && root.child('admins').child(auth.uid).exists()) || auth == null",
         ".validate": "(auth != null && root.child('admins').child(auth.uid).exists()) || (newData.hasChildren(['firstName', 'lastName', 'email', 'affiliations', 'plotId', 'plots', 'agreeRules', 'agreeWaiver', 'paymentVerified', 'createdAt']) && newData.child('firstName').isString() && newData.child('firstName').val().length <= 80 && newData.child('lastName').isString() && newData.child('lastName').val().length <= 80 && (newData.child('firstName').val().length > 0 || newData.child('lastName').val().length > 0) && newData.child('email').isString() && newData.child('email').val().length <= 254 && newData.child('email').val().matches(/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/) && newData.child('affiliations').hasChildren(['0']) && !newData.child('affiliations').child('6').exists() && newData.child('plotId').isString() && newData.child('plotId').val().matches(/^plot-[0-9]{3}$/) && newData.child('plots').hasChildren(['0']) && !newData.child('plots').child('4').exists() && newData.child('agreeRules').val() === true && newData.child('agreeWaiver').val() === true && newData.child('paymentVerified').isBoolean() && newData.child('createdAt').isString())",
+        "firstName": {
+          ".validate": "newData.isString() && newData.val().length <= 80"
+        },
+        "lastName": {
+          ".validate": "newData.isString() && newData.val().length <= 80"
+        },
+        "email": {
+          ".validate": "newData.isString() && newData.val().length <= 254 && newData.val().matches(/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/)"
+        },
+        "affiliation": {
+          ".validate": "newData.val() === null || (newData.isString() && newData.val().length <= 40)"
+        },
+        "studentType": {
+          ".validate": "newData.val() === null || (newData.isString() && newData.val().length <= 40)"
+        },
+        "plotId": {
+          ".validate": "newData.isString() && newData.val().matches(/^plot-[0-9]{3}$/)"
+        },
+        "agreeRules": {
+          ".validate": "newData.isBoolean()"
+        },
+        "agreeWaiver": {
+          ".validate": "newData.isBoolean()"
+        },
+        "paymentVerified": {
+          ".validate": "newData.isBoolean()"
+        },
+        "createdAt": {
+          ".validate": "newData.isString()"
+        },
+        "updatedAt": {
+          ".validate": "newData.isString()"
+        },
         "affiliations": {
           "$index": {
             ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40"
